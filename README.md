@@ -60,7 +60,7 @@ Authentication is entirely Clerk. This server never issues tokens or stores pass
    handle generated from their email.
 3. **Create a webhook for this server.** Clerk supports several endpoints, so this does not affect the main server's.
    - Dashboard → _Webhooks_ → _Add endpoint_
-   - URL: `https://<your-community-domain>/api/webhooks/clerk`
+   - URL: `https://beu-community-api.pyqdeck.in/api/webhooks/clerk` (production)
    - Events: `user.created`, `user.updated`, `user.deleted`
    - Copy the **Signing Secret** into `CLERK_WEBHOOK_SIGNING_SECRET`
 4. _(Optional)_ Turn on **Restrict changes** under _User & authentication_ if you don't want users editing identifiers
