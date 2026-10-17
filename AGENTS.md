@@ -77,3 +77,15 @@ Dependencies are injected via constructor default params (`constructor(repo = ne
 - Served at `/api/docs` (UI) and `/api/docs/json` (spec), disabled when `NODE_ENV=production`. Mounted before `helmet` because swagger-ui needs inline scripts.
 - Each module documents itself in `<feature>.docs.ts` exporting an OpenAPI `paths` object; register it in `src/docs/openapi.ts`. Shared components exist: `Pagination` and `Error` schemas, `Page`/`Limit`/`Sort` parameters (reference with `$ref: "#/components/parameters/Page"` etc.).
 - Update the module's docs whenever its routes or schemas change.
+
+## Package manager
+
+This project uses **pnpm** (never npm/yarn; no `package-lock.json`). Build scripts are allow-listed in `package.json` under `pnpm.onlyBuiltDependencies`.
+
+## Testing
+
+- Vitest + Supertest + mongodb-memory-server. `pnpm test`, `pnpm test:watch`, `pnpm test:coverage`.
+- `tests/unit` for pure logic; `tests/integration` for HTTP through the real middleware stack via `createApp(testRoutes)`.
+- `tests/globalSetup.ts` starts one in-memory MongoDB for the run (first run downloads the mongod binary). Each test file uses its own database via `tests/helpers/db.ts` (`connectTestDb`, `clearTestDb`, `disconnectTestDb`).
+- `tests/helpers/widget.ts` is a throwaway module following the layered pattern, used to exercise the base classes. Copy its approach when testing a new feature.
+- `tsconfig.json` covers src + tests (typecheck); `tsconfig.build.json` builds only `src` to `dist`.
