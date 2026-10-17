@@ -3,6 +3,7 @@ import { StatusCodes, getReasonPhrase } from "http-status-codes";
 import mongoose from "mongoose";
 import { env } from "../../config/env.js";
 import { AppError } from "../errors/AppError.js";
+import { isDuplicateKeyError } from "../utils/mongo.js";
 
 export const notFound: RequestHandler = (req, _res, next) => {
   next(AppError.notFound(`Route ${req.method} ${req.originalUrl} not found`));
@@ -22,7 +23,7 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   } else if (err instanceof mongoose.Error.CastError) {
     status = StatusCodes.BAD_REQUEST;
     message = `Invalid ${err.path}`;
-  } else if (err?.code === 11000) {
+  } else if (isDuplicateKeyError(err)) {
     status = StatusCodes.CONFLICT;
     message = "Duplicate value";
     details = err.keyValue;

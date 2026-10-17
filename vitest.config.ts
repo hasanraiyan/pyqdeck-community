@@ -8,6 +8,8 @@ export default defineConfig({
     env: {
       NODE_ENV: "test",
       LOG_LEVEL: "silent",
+      COMMUNITY_ADMIN_EMAILS: "boss@example.com",
+      CLERK_WEBHOOK_SIGNING_SECRET: "whsec_test",
       // never actually connected to; tests connect to the in-memory server explicitly
       MONGODB_URI: "mongodb://127.0.0.1:27017/unused",
     },

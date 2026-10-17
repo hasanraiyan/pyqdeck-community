@@ -5,6 +5,9 @@ import helmet from "helmet";
 import { env } from "./config/env.js";
 import swaggerRouter from "./docs/swagger.js";
 import { errorHandler, notFound } from "./core/middleware/errorHandler.js";
+import { attachUser } from "./modules/auth/auth.middleware.js";
+import clerkWebhookRoutes from "./modules/auth/clerk-webhook.routes.js";
+import { clerkAuth } from "./modules/auth/clerk.middleware.js";
 import { requestLogger } from "./core/middleware/requestLogger.js";
 import defaultRoutes from "./routes/index.js";
 
@@ -20,7 +23,12 @@ export function createApp(apiRoutes: Router = defaultRoutes) {
 
   app.use(helmet());
   app.use(cors({ origin: env.CORS_ORIGIN === "*" ? true : env.CORS_ORIGIN.split(",") }));
+  // Svix signs the raw bytes, so the webhook must be mounted before express.json().
+  app.use("/api/webhooks", clerkWebhookRoutes);
+
   app.use(express.json());
+  app.use(clerkAuth);
+  app.use(attachUser);
 
   app.use("/api", apiRoutes);
 

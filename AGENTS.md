@@ -89,3 +89,15 @@ This project uses **pnpm** (never npm/yarn; no `package-lock.json`). Build scrip
 - `tests/globalSetup.ts` starts one in-memory MongoDB for the run (first run downloads the mongod binary). Each test file uses its own database via `tests/helpers/db.ts` (`connectTestDb`, `clearTestDb`, `disconnectTestDb`).
 - `tests/helpers/widget.ts` is a throwaway module following the layered pattern, used to exercise the base classes. Copy its approach when testing a new feature.
 - `tsconfig.json` covers src + tests (typecheck); `tsconfig.build.json` builds only `src` to `dist`.
+
+## Auth (Clerk)
+
+- Identity is **Clerk, same instance as the main PYQDeck server** (`D:\projects\PYQDECK\server`). This server never issues tokens or stores passwords. Data is NOT shared with the main server: separate database, separate `users` collection.
+- Flow: `clerkAuth` (verifies `Authorization: Bearer <Clerk session token>`) -> `attachUser` (maps Clerk id to a community profile in `req.user`, creating it on first sight) -> route-level guards.
+- Anonymous-friendly: both middlewares fail soft (log and continue unauthenticated). **Protection is per route**: add `requireAuth` (401 signed out/deleted, 403 suspended) and, for staff routes, `requireRole("moderator")` (admins always pass). Never read `req.user` on a route without `requireAuth`.
+- Import guards from `modules/auth/auth.middleware.ts`. `req.user` is typed in `src/types/express.d.ts`.
+- **Clerk owns identity.** `username`, `displayName`, `avatarUrl` and `email` are copied from Clerk on first sign-in and re-synced by the webhook; they are NOT editable through this API (users change them in Clerk). The community profile only owns `headline`, `bio`, `role` (`member|moderator|admin`) and `status` (`active|suspended|deleted`), and none of role/status is editable via the API. If a Clerk account has no username, or its username is reserved (`admin`, `support`, ... - Clerk cannot block usernames, only emails/domains/phones), a handle is generated from the email instead. Never treat a username as proof of staff status; the `role` field is the only trust signal.
+- Responses: use `toPublicProfile` for anyone, `toOwnProfile` only for the caller. Never expose `email`, `clerkId` or `status` publicly.
+- Admin bootstrap: verified Clerk emails listed in `COMMUNITY_ADMIN_EMAILS` become `admin` (promote-only; unverified emails never qualify).
+- Webhook `POST /api/webhooks/clerk` (mounted before `express.json`, Svix-signed): `user.created/updated` sync username, name, avatar and email from Clerk; `user.deleted` soft-deletes (keeps the row so posts keep a valid author, scrubs personal data, frees the username). Posts/comments must reference users by `_id`, and render `status: "deleted"` authors as "Deleted user".
+- Tests mock `@clerk/express` (session = `x-test-user` header); see `tests/integration/auth.test.ts`.

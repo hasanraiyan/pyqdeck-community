@@ -1,8 +1,10 @@
+import { userPaths } from "../modules/users/user.docs.js";
 import { healthPaths } from "../modules/health/health.docs.js";
 
 /** Register each module's `<feature>.docs.ts` paths here. */
 const paths = {
   ...healthPaths,
+  ...userPaths,
 };
 
 export const openApiSpec = {
@@ -11,6 +13,13 @@ export const openApiSpec = {
   servers: [{ url: "/api" }],
   paths,
   components: {
+    securitySchemes: {
+      bearerAuth: {
+        type: "http",
+        scheme: "bearer",
+        description: "Clerk session token (same Clerk instance as the main PYQDeck app)",
+      },
+    },
     parameters: {
       Page: { name: "page", in: "query", schema: { type: "integer", minimum: 1, default: 1 } },
       Limit: { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 100, default: 20 } },
