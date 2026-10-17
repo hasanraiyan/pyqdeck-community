@@ -35,7 +35,8 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
 
   // Never leak internal messages for 5xx outside development.
   const isServerError = status >= StatusCodes.INTERNAL_SERVER_ERROR;
-  const safeMessage = isServerError && env.NODE_ENV === "production" ? getReasonPhrase(status) : (message ?? getReasonPhrase(status));
+  const safeMessage =
+    isServerError && env.NODE_ENV === "production" ? getReasonPhrase(status) : (message ?? getReasonPhrase(status));
 
   res.status(status).json({
     success: false,
