@@ -1,3 +1,5 @@
+import { mediaPaths } from "../modules/media/media.docs.js";
+import { storagePaths } from "../modules/storage/storage.docs.js";
 import { userPaths } from "../modules/users/user.docs.js";
 import { healthPaths } from "../modules/health/health.docs.js";
 
@@ -5,6 +7,8 @@ import { healthPaths } from "../modules/health/health.docs.js";
 const paths = {
   ...healthPaths,
   ...userPaths,
+  ...mediaPaths,
+  ...storagePaths,
 };
 
 export const openApiSpec = {

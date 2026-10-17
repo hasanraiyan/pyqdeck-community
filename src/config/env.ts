@@ -20,6 +20,13 @@ const schema = z.object({
         .map((e) => e.trim().toLowerCase())
         .filter(Boolean),
     ),
+  // 32 random bytes, base64 (openssl rand -base64 32). Encrypts storage account credentials at rest.
+  STORAGE_ENCRYPTION_KEY: z
+    .string()
+    .optional()
+    .refine((v) => !v || Buffer.from(v, "base64").length === 32, "must be 32 bytes, base64 encoded"),
+  // Share of each storage account kept free, so we never fill an account to the brim.
+  STORAGE_HEADROOM_PERCENT: z.coerce.number().min(0).max(50).default(5),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });
 
@@ -27,7 +34,10 @@ const parsed = schema
   .refine(
     (e) =>
       e.NODE_ENV !== "production" || (e.CLERK_PUBLISHABLE_KEY && e.CLERK_SECRET_KEY && e.CLERK_WEBHOOK_SIGNING_SECRET),
-    { message: "CLERK_PUBLISHABLE_KEY, CLERK_SECRET_KEY and CLERK_WEBHOOK_SIGNING_SECRET are required in production" },
+    {
+      message:
+        "CLERK_PUBLISHABLE_KEY, CLERK_SECRET_KEY and CLERK_WEBHOOK_SIGNING_SECRET and STORAGE_ENCRYPTION_KEY are required in production",
+    },
   )
   .safeParse(process.env);
 if (!parsed.success) {

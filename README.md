@@ -28,17 +28,19 @@ cp .env.example .env
 
 ## 2. Configure `.env`
 
-| Variable                       | Required | Description                                                                                            |
-| ------------------------------ | -------- | ------------------------------------------------------------------------------------------------------ |
-| `NODE_ENV`                     | no       | `development` (default), `production`, `test`                                                          |
-| `PORT`                         | no       | Default `5000`                                                                                         |
-| `MONGODB_URI`                  | yes      | **Use a separate database** from the main server, e.g. `mongodb://127.0.0.1:27017/pyqdeck_community`   |
-| `CORS_ORIGIN`                  | no       | `*` or a comma separated list of web origins                                                           |
-| `LOG_LEVEL`                    | no       | `fatal` `error` `warn` `info` (default) `debug` `trace` `silent`                                       |
-| `CLERK_PUBLISHABLE_KEY`        | prod     | **Same value as the main server**                                                                      |
-| `CLERK_SECRET_KEY`             | prod     | **Same value as the main server**                                                                      |
-| `CLERK_WEBHOOK_SIGNING_SECRET` | prod     | From the webhook endpoint created for _this_ server (step 3)                                           |
-| `COMMUNITY_ADMIN_EMAILS`       | no       | Comma separated. Accounts with a **verified** Clerk email in this list become `admin` on first sign-in |
+| Variable                       | Required | Description                                                                                                         |
+| ------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`                     | no       | `development` (default), `production`, `test`                                                                       |
+| `PORT`                         | no       | Default `5000`                                                                                                      |
+| `MONGODB_URI`                  | yes      | **Use a separate database** from the main server, e.g. `mongodb://127.0.0.1:27017/pyqdeck_community`                |
+| `CORS_ORIGIN`                  | no       | `*` or a comma separated list of web origins                                                                        |
+| `LOG_LEVEL`                    | no       | `fatal` `error` `warn` `info` (default) `debug` `trace` `silent`                                                    |
+| `CLERK_PUBLISHABLE_KEY`        | prod     | **Same value as the main server**                                                                                   |
+| `CLERK_SECRET_KEY`             | prod     | **Same value as the main server**                                                                                   |
+| `CLERK_WEBHOOK_SIGNING_SECRET` | prod     | From the webhook endpoint created for _this_ server (step 3)                                                        |
+| `STORAGE_ENCRYPTION_KEY`       | prod     | 32 random bytes, base64 (`openssl rand -base64 32`). Encrypts storage account credentials. Required to add accounts |
+| `STORAGE_HEADROOM_PERCENT`     | no       | Share of each storage account kept free. Default `5`                                                                |
+| `COMMUNITY_ADMIN_EMAILS`       | no       | Comma separated. Accounts with a **verified** Clerk email in this list become `admin` on first sign-in              |
 
 > Why a separate database? Both servers define a `User` model, which maps to a `users` collection. Sharing a database
 > would make them overwrite each other. Users are linked only through their Clerk id.
@@ -112,6 +114,56 @@ it when reporting a problem.
 | GET    | `/api/users/:username` | public | Public profile (never includes email)                            |
 | POST   | `/api/webhooks/clerk`  | Svix   | Clerk user lifecycle sync (signature verified, not a user route) |
 
+## Image uploads (storage)
+
+Images are stored at an external provider (Cloudinary today) through a pluggable storage layer. Storage accounts are
+data, so when one fills up you plug in another without redeploying.
+
+### One-time setup
+
+1. Generate an encryption key for stored credentials and put it in `.env`:
+   ```bash
+   openssl rand -base64 32
+   ```
+   ```
+   STORAGE_ENCRYPTION_KEY=<the value above>
+   ```
+2. Sign in as an admin and add your first storage account (the credentials are tested, then stored encrypted):
+   ```http
+   POST /api/admin/storage/accounts
+   Authorization: Bearer <admin Clerk token>
+
+   { "name": "cloudinary-1", "provider": "cloudinary",
+     "credentials": { "cloudName": "...", "apiKey": "...", "apiSecret": "..." },
+     "capacityBytes": 2147483648, "priority": 1 }
+   ```
+   `capacityBytes` is a soft limit that you choose; set it a little below what the provider really allows.
+
+### When an account fills up
+
+Nothing breaks: the full account is marked `full` and new uploads go to the next one. If none has room, uploads return
+`507`. To add space, create another provider account and repeat the `POST` above with a new `name` (and a higher
+`priority` number so the older one is used first). Existing files keep working from the account they live on. Use
+`GET /api/admin/storage/accounts` to see usage, `PATCH` to disable or reprioritise, and
+`POST /api/admin/storage/accounts/:id/refresh-usage` to re-sync real usage from the provider.
+
+### How the app uploads (direct, no bytes through this server)
+
+1. `POST /api/media/uploads` with `{ "files": [{ "mimeType": "image/png", "size": 123456 }] }` (up to 8). The response
+   has one ticket per file: `{ id, upload: { method, url, fields, fileField, expiresAt } }`.
+2. Send a multipart `POST` to `upload.url` containing every key of `upload.fields` plus the file in the field named
+   `upload.fileField`. This goes straight to the provider.
+3. `POST /api/media/:id/complete`. The server asks the provider what actually arrived and rejects (and deletes) anything
+   larger than declared or not a JPEG/PNG/WebP. The media is then `pending` until a post uses it; unused uploads are
+   removed automatically after about an hour.
+
+`POST /api/media` (multipart, field `files`) still exists as a fallback that passes bytes through this server.
+
+### Adding another provider later (e.g. UploadThing, R2)
+
+Write `src/modules/storage/providers/<name>.provider.ts` implementing `StorageProvider` (plus `DirectUploadProvider`
+for direct uploads) and register it in `providers/index.ts`. Nothing else changes. Details are in `AGENTS.md`.
+
 ## How identity works
 
 - **Clerk owns identity.** `username`, `displayName`, `avatarUrl` and `email` are copied from Clerk and re-synced by
@@ -169,5 +221,7 @@ Read that before adding a module.
 - [ ] Clerk webhook endpoint points at the production URL and its signing secret is set
 - [ ] `CORS_ORIGIN` is restricted to your real web origins (not `*`)
 - [ ] `COMMUNITY_ADMIN_EMAILS` contains only people who should be admins
+- [ ] `STORAGE_ENCRYPTION_KEY` is set and backed up (losing it makes stored storage credentials unreadable)
+- [ ] At least one storage account is added, and you know how to add the next one
 - [ ] Reverse proxy forwards the **raw** body on `/api/webhooks/clerk` (do not rewrite or re-encode it, or signature
       checks fail)
