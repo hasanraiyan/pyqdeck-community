@@ -1,10 +1,10 @@
 import { Types } from "mongoose";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { MemoryProvider } from "../../src/modules/storage/providers/memory.provider.js";
 import { addClerkUser, as, clerkUsers } from "../helpers/clerk.js";
 import { clearTestDb, connectTestDb, disconnectTestDb } from "../helpers/db.js";
 import { GIF, PNG, pngOfSize } from "../helpers/images.js";
+import { providerOf } from "../helpers/storage.js";
 
 vi.mock("@clerk/express", async () => (await import("../helpers/clerk.js")).clerkModule);
 
@@ -12,7 +12,7 @@ const { createApp } = await import("../../src/app.js");
 const { MediaModel } = await import("../../src/modules/media/media.model.js");
 const { getMediaService } = await import("../../src/modules/media/media.module.js");
 const { StorageAccountModel } = await import("../../src/modules/storage/storage-account.model.js");
-const { getProviderResolver, getStorageAdminService } = await import("../../src/modules/storage/storage.module.js");
+const { getStorageAdminService } = await import("../../src/modules/storage/storage.module.js");
 const { UserModel } = await import("../../src/modules/users/user.model.js");
 
 const app = createApp();
@@ -28,16 +28,6 @@ const addAccount = (name: string, over: { priority?: number; capacityBytes?: num
   });
 
 const accountState = async (name: string) => (await StorageAccountModel.findOne({ name }))!;
-
-/** The in-memory provider behind an account, so a test can play the part of the app uploading straight to it. */
-const providerOf = async (name: string) => {
-  const account = await StorageAccountModel.findOne({ name }).select("+credentials");
-  return getProviderResolver().forAccount({
-    id: account!.id,
-    provider: account!.provider,
-    encryptedCredentials: account!.credentials,
-  }) as MemoryProvider;
-};
 
 const userId = async (clerkId: string) =>
   (await request(app).get("/api/users/me").set(as(clerkId)).expect(200)).body.data.id as string;

@@ -40,6 +40,9 @@ cp .env.example .env
 | `CLERK_WEBHOOK_SIGNING_SECRET` | prod     | From the webhook endpoint created for _this_ server (step 3)                                                        |
 | `STORAGE_ENCRYPTION_KEY`       | prod     | 32 random bytes, base64 (`openssl rand -base64 32`). Encrypts storage account credentials. Required to add accounts |
 | `STORAGE_HEADROOM_PERCENT`     | no       | Share of each storage account kept free. Default `5`                                                                |
+| `OPENAI_API_KEY`               | prod     | OpenAI key for content moderation. Without it (dev only) moderation is **off** and everything is allowed            |
+| `MODERATION_MODEL`             | no       | Default `omni-moderation-latest`                                                                                    |
+| `MODERATION_TIMEOUT_MS`        | no       | Default `8000`                                                                                                      |
 | `COMMUNITY_ADMIN_EMAILS`       | no       | Comma separated. Accounts with a **verified** Clerk email in this list become `admin` on first sign-in              |
 
 > Why a separate database? Both servers define a `User` model, which maps to a `users` collection. Sharing a database
@@ -164,6 +167,48 @@ Nothing breaks: the full account is marked `full` and new uploads go to the next
 Write `src/modules/storage/providers/<name>.provider.ts` implementing `StorageProvider` (plus `DirectUploadProvider`
 for direct uploads) and register it in `providers/index.ts`. Nothing else changes. Details are in `AGENTS.md`.
 
+## Content moderation
+
+Everything users submit is checked by the OpenAI Moderation API (`omni-moderation-latest`, free to use) before it can be
+published. Images are already covered; posts and comments will use the same service.
+
+**What happens to bad content**
+
+| Situation                                                                                         | Result                                                                 |
+| ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Sexual content, hate, graphic violence, threats, etc.                                             | **Rejected** (`422`), image deleted, event logged                      |
+| Borderline: harassment, violence, self-harm, drug content, or a high score just under the cut-off | **Held** (images are rejected until a review queue exists)             |
+| Moderation service down, slow, or key invalid                                                     | **Never published**: `503 try again shortly` (images stay `uploading`) |
+| Image the checker cannot read (corrupt, unsupported)                                              | Rejected                                                               |
+| Sexual content involving minors                                                                   | Rejected **and flagged `escalate`** (see below)                        |
+
+Where the images are checked: multipart uploads are checked **before** being stored (a rejected image never reaches the
+storage provider); direct uploads are checked at `POST /api/media/:id/complete`, and a rejected file is deleted from
+storage.
+
+**Tuning the rules.** Which categories reject, hold or are ignored is one table, `DEFAULT_POLICY` in
+`src/modules/moderation/moderation.policy.ts`. Edit it to match your community guidelines. `nearMissScore` (default
+`0.5`) holds content the provider did not flag but scored highly.
+
+**What moderators can see.** `GET /api/moderation/events` (moderators and admins) lists blocked and held items: who,
+which category, scores, and `escalate`. The content itself is **never stored**, and events are deleted after 90 days.
+
+**Child safety (`escalate: true`).** Blocking such content is not enough. Decide now who reviews `escalate` events,
+how you preserve what law requires, and how you report it (in India, via the national cybercrime reporting portal and
+your legal counsel). Treat this as a legal process, not a feature; the API only makes sure it is never published and
+is surfaced to you.
+
+**Using it from a new feature** (posts, comments):
+
+```ts
+const decision = await getModerationService().moderate(
+  { text: post.body, images: [{ url }] },
+  { userId, source: "post", sourceId },
+);
+// allow -> publish | review -> save as pending_review | reject -> 422
+// decision.degraded === true means the checker was down: treat like review, never publish.
+```
+
 ## How identity works
 
 - **Clerk owns identity.** `username`, `displayName`, `avatarUrl` and `email` are copied from Clerk and re-synced by
@@ -222,6 +267,7 @@ Read that before adding a module.
 - [ ] `CORS_ORIGIN` is restricted to your real web origins (not `*`)
 - [ ] `COMMUNITY_ADMIN_EMAILS` contains only people who should be admins
 - [ ] `STORAGE_ENCRYPTION_KEY` is set and backed up (losing it makes stored storage credentials unreadable)
+- [ ] `OPENAI_API_KEY` is set (production refuses to start without it) and you have decided who handles `escalate` events
 - [ ] At least one storage account is added, and you know how to add the next one
 - [ ] Reverse proxy forwards the **raw** body on `/api/webhooks/clerk` (do not rewrite or re-encode it, or signature
       checks fail)

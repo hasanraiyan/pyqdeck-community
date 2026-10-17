@@ -1,3 +1,4 @@
+import { moderationPaths } from "../modules/moderation/moderation.docs.js";
 import { mediaPaths } from "../modules/media/media.docs.js";
 import { storagePaths } from "../modules/storage/storage.docs.js";
 import { userPaths } from "../modules/users/user.docs.js";
@@ -8,6 +9,7 @@ const paths = {
   ...healthPaths,
   ...userPaths,
   ...mediaPaths,
+  ...moderationPaths,
   ...storagePaths,
 };
 

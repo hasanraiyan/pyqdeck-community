@@ -59,3 +59,13 @@ export interface DeclaredFile {
   mimeType: string;
   size: number;
 }
+
+export type ModeratedImage = { url: string } | { data: Buffer; mimeType: string };
+
+/** Media states what it needs from moderation; it never imports the moderation module. */
+export interface ImageModerator {
+  check(
+    image: ModeratedImage,
+    context: { userId: string; sourceId?: string },
+  ): Promise<{ allowed: boolean; unavailable: boolean }>;
+}

@@ -115,3 +115,15 @@ Two modules with a strict one-way dependency: `media` uses `storage` through a p
 - **For the posts module:** call `MediaService.attach(ownerId, ids)` when a post is created (max 8 per post) and `MediaService.release(ids)` when it is deleted. Unclaimed uploads are removed by `MediaCleanupJob` (`pending` after 1h, `uploading` after 65 min).
 - **Limits:** 8 images per post, 8 MB each, JPEG/PNG/WebP, at most 16 unfinished tickets per user. File type is decided from the bytes (multipart) or by the provider (direct), never from the filename or client `Content-Type`.
 - Tests: unit tests (`pnpm test:unit`) need no database and cover the storage logic with `tests/helpers/fake-accounts.ts`; integration tests use the `memory` provider and its `simulateClientUpload` helper to act as the app.
+
+## Moderation (all user-generated content)
+
+- **Every piece of user content must go through `getModerationService().moderate(input, context)` before it is published**: post text, comments, captions, and images. Do not call OpenAI directly from a feature, and do not skip it "for now".
+- `moderate()` returns `{ action: "allow" | "review" | "reject", categories, reasons, degraded, escalate }` and never throws because the provider is down. Handle it like this: `allow` -> publish; `review` -> do NOT publish (store as `pending_review`, or reject if there is no queue); `reject` -> `AppError.unprocessable(...)` (422). `degraded: true` means the checker was unavailable: treat as `review` for text, or answer 503 for flows the client can retry. **Fail closed: unchecked content is never published.**
+- Layers: `ModerationProvider` (vendor, `providers/openai.provider.ts`) -> `ModerationPolicy` (pure rules, `DEFAULT_POLICY` table) -> `ModerationService` (orchestration, fail-closed, audit) -> `ModerationAudit` (`ModerationEventRepository`). The vendor is chosen in one place, `moderation.module.ts`. To change rules edit `DEFAULT_POLICY`; to change vendor write a new provider.
+- Other modules depend on a small port they define themselves, not on the moderation module (see `ImageModerator` in `media.types.ts`, adapted in `media.module.ts`). Do the same for posts/comments.
+- `context` is audit-only (`userId`, `source` such as "post" or "comment", `sourceId`). Pass them; never send user identity to the provider.
+- **Never store or log the moderated content.** `ModerationEvent` keeps who/what/why/scores only, with a 90 day TTL. `escalate: true` (sexual/minors) is logged at error level and needs a human/legal process.
+- Images: moderate raw bytes before storing when they pass through the server, or by URL at the `complete` step for direct uploads. A rejected stored file must be deleted; a moderation outage must NOT delete it (the client retries).
+- Without `OPENAI_API_KEY`, development uses a passthrough provider that allows everything and logs a warning. Production refuses to start without the key (`REQUIRED_IN_PRODUCTION` in `config/env.ts`).
+- Tests: `tests/unit/moderation-*.test.ts` need no network (fake `fetch`/provider). For feature tests inject a fake moderator, as `tests/integration/media-moderation.test.ts` does.

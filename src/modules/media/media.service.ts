@@ -20,6 +20,8 @@ import type {
   DirectUploadStorage,
   FileStorage,
   FileValidator,
+  ImageModerator,
+  ModeratedImage,
   UploadedFile,
   UploadTicket,
 } from "./media.types.js";
@@ -38,7 +40,22 @@ export class MediaService {
     private readonly repository: MediaRepository,
     private readonly storage: FileStorage & DirectUploadStorage,
     private readonly validator: FileValidator,
+    private readonly moderator: ImageModerator,
   ) {}
+
+  /**
+   * Blocks anything that is not clearly fine. A moderation outage is a 503 (retry shortly), never a silent pass, so
+   * unchecked images cannot slip through while the checker is down.
+   */
+  private async assertImageAllowed(image: ModeratedImage, userId: string, sourceId?: string): Promise<void> {
+    const verdict = await this.moderator.check(image, { userId, sourceId });
+    if (verdict.unavailable) {
+      throw AppError.serviceUnavailable("Image checks are temporarily unavailable, please try again shortly");
+    }
+    if (!verdict.allowed) {
+      throw AppError.unprocessable("This image cannot be posted because it may violate our community guidelines");
+    }
+  }
 
   /**
    * Direct upload, step 1. The app declares what it will upload (type and size, no bytes). Space is reserved and a
@@ -126,6 +143,15 @@ export class MediaService {
       throw AppError.badRequest("The uploaded file does not match what was declared");
     }
 
+    // The file is already at the provider, so a rejected image must be deleted. A moderation outage must not delete
+    // it: the app can simply call complete again once checks are back.
+    try {
+      await this.assertImageAllowed({ url: found.url }, ownerId, media.id);
+    } catch (err) {
+      if (err instanceof AppError && err.statusCode === StatusCodes.UNPROCESSABLE_ENTITY) await this.discard(media);
+      throw err;
+    }
+
     const done = await this.repository.completeUpload(media.id, {
       url: found.url,
       size: found.size,
@@ -149,6 +175,11 @@ export class MediaService {
 
     const validated = await Promise.all(
       files.map(async (file) => ({ file, ...(await this.validator.validate(file.buffer)) })),
+    );
+
+    // Checked before anything is stored, so a rejected image never reaches the storage provider at all.
+    await Promise.all(
+      validated.map(({ file, mimeType }) => this.assertImageAllowed({ data: file.buffer, mimeType }, ownerId)),
     );
 
     const settled = await Promise.allSettled(

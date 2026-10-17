@@ -31,6 +31,9 @@ export class AppError extends Error {
   static tooManyRequests(message?: string) {
     return new AppError(StatusCodes.TOO_MANY_REQUESTS, message);
   }
+  static serviceUnavailable(message?: string) {
+    return new AppError(StatusCodes.SERVICE_UNAVAILABLE, message);
+  }
   static internal(message?: string) {
     return new AppError(StatusCodes.INTERNAL_SERVER_ERROR, message);
   }

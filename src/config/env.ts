@@ -27,22 +27,31 @@ const schema = z.object({
     .refine((v) => !v || Buffer.from(v, "base64").length === 32, "must be 32 bytes, base64 encoded"),
   // Share of each storage account kept free, so we never fill an account to the brim.
   STORAGE_HEADROOM_PERCENT: z.coerce.number().min(0).max(50).default(5),
+  // Content moderation (OpenAI Moderation API). Required in production so moderation can never be silently off.
+  OPENAI_API_KEY: z.string().optional(),
+  MODERATION_MODEL: z.string().default("omni-moderation-latest"),
+  MODERATION_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(8000),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });
 
+/** Optional locally, mandatory in production so auth, storage encryption and moderation can never be silently off. */
+const REQUIRED_IN_PRODUCTION = [
+  "CLERK_PUBLISHABLE_KEY",
+  "CLERK_SECRET_KEY",
+  "CLERK_WEBHOOK_SIGNING_SECRET",
+  "STORAGE_ENCRYPTION_KEY",
+  "OPENAI_API_KEY",
+] as const;
+
 const parsed = schema
-  .refine(
-    (e) =>
-      e.NODE_ENV !== "production" || (e.CLERK_PUBLISHABLE_KEY && e.CLERK_SECRET_KEY && e.CLERK_WEBHOOK_SIGNING_SECRET),
-    {
-      message:
-        "CLERK_PUBLISHABLE_KEY, CLERK_SECRET_KEY and CLERK_WEBHOOK_SIGNING_SECRET and STORAGE_ENCRYPTION_KEY are required in production",
-    },
-  )
+  .refine((e) => e.NODE_ENV !== "production" || REQUIRED_IN_PRODUCTION.every((key) => Boolean(e[key])), {
+    message: `${REQUIRED_IN_PRODUCTION.join(", ")} are required in production`,
+  })
   .safeParse(process.env);
 if (!parsed.success) {
   // logger depends on env, so this is the one place that must use console
-  console.error("Invalid environment variables:", parsed.error.flatten().fieldErrors);
+  const { formErrors, fieldErrors } = parsed.error.flatten();
+  console.error("Invalid environment variables:", [...formErrors, ...Object.entries(fieldErrors)]);
   process.exit(1);
 }
 
