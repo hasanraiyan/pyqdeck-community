@@ -15,21 +15,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
 
-      - run: npm ci --ignore-scripts
+      - run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Typecheck
-        run: npm run typecheck
+        run: pnpm typecheck
 
       - name: Lint
-        run: npm run lint
+        run: pnpm lint
 
       - name: Format check
-        run: npm run format:check
+        run: pnpm format:check
 
       - name: Build
-        run: npm run build
+        run: pnpm build

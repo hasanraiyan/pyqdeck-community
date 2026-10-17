@@ -1,14 +1,15 @@
 import compression from "compression";
 import cors from "cors";
-import express from "express";
+import express, { type Router } from "express";
 import helmet from "helmet";
 import { env } from "./config/env.js";
 import swaggerRouter from "./docs/swagger.js";
 import { errorHandler, notFound } from "./core/middleware/errorHandler.js";
 import { requestLogger } from "./core/middleware/requestLogger.js";
-import routes from "./routes/index.js";
+import defaultRoutes from "./routes/index.js";
 
-export function createApp() {
+/** `apiRoutes` is injectable so tests can mount extra routers on the real middleware stack. */
+export function createApp(apiRoutes: Router = defaultRoutes) {
   const app = express();
 
   app.use(requestLogger);
@@ -21,7 +22,7 @@ export function createApp() {
   app.use(cors({ origin: env.CORS_ORIGIN === "*" ? true : env.CORS_ORIGIN.split(",") }));
   app.use(express.json());
 
-  app.use("/api", routes);
+  app.use("/api", apiRoutes);
 
   app.use(notFound);
   app.use(errorHandler);

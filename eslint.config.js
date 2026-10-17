@@ -9,7 +9,7 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   prettier,
   {
-    files: ["src/**/*.ts"],
+    files: ["src/**/*.ts", "tests/**/*.ts", "vitest.config.ts"],
     languageOptions: { globals: globals.node },
     rules: {
       "no-console": "error",

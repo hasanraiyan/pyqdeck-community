@@ -4,9 +4,9 @@
   "description": "",
   "main": "dist/server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run",
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
@@ -14,7 +14,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky",
-    "check": "npm run typecheck && npm run lint && npm run format:check"
+    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [],
   "author": "",
@@ -39,17 +41,22 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.5",
+    "@types/supertest": "^7.2.1",
     "@types/swagger-ui-express": "^4.1.8",
+    "@vitest/coverage-v8": "^5.0.5",
     "eslint": "^10.13.0",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.13.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
+    "mongodb-memory-server": "^11.3.0",
     "pino-pretty": "^13.2.0",
     "prettier": "^3.9.10",
+    "supertest": "^7.3.1",
     "tsx": "^4.23.15",
     "typescript": "~6.0",
-    "typescript-eslint": "^8.71.2"
+    "typescript-eslint": "^8.71.2",
+    "vitest": "^5.0.5"
   },
   "engines": {
     "node": ">=20"
@@ -61,6 +68,12 @@
     ],
     "*.{json,md,yml,yaml,js}": [
       "prettier --write"
+    ]
+  },
+  "packageManager": "pnpm@10.33.2",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
     ]
   }
 }

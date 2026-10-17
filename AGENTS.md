@@ -4,9 +4,9 @@ Express 5 + TypeScript (ESM) + Mongoose + Zod backend for PYQDeck community.
 
 ## Commands
 
-- `npm run dev` – run with tsx watch
-- `npm run typecheck` – `tsc --noEmit` (run after every change)
-- `npm run build` / `npm start` – compile to `dist/` and run
+- `pnpm dev` – run with tsx watch
+- `pnpm typecheck` – `tsc --noEmit` (run after every change)
+- `pnpm build` / `pnpm start` – compile to `dist/` and run
 
 ## Layout
 
@@ -47,7 +47,7 @@ Dependencies are injected via constructor default params (`constructor(repo = ne
 
 1. Create `src/modules/<feature>/` with the files above (skip model/repository if no persistence, as in `health`).
 2. Register in `src/routes/index.ts`: `router.use("/<feature>", featureRoutes)`.
-3. Run `npm run typecheck`.
+3. Run `pnpm typecheck`.
 
 ## Conventions
 
