@@ -107,3 +107,18 @@ describe("unknown categories and escalation", () => {
     expect(strict.decide(verdict(["harassment"])).action).toBe("reject");
   });
 });
+
+describe("stricter margin for sexual content", () => {
+  const policy = new ModerationPolicy();
+  const verdict = (scores: Record<string, number>) => ({ flagged: false, categories: {}, scores });
+
+  it("holds a borderline sexual score that the general 0.5 margin would wave through", () => {
+    expect(policy.decide(verdict({ sexual: 0.3 })).action).toBe("review");
+    expect(policy.decide(verdict({ sexual: 0.1 })).action).toBe("allow");
+    expect(policy.decide(verdict({ violence: 0.3 })).action).toBe("allow");
+  });
+
+  it("holds even a faint sign of sexual content involving minors", () => {
+    expect(policy.decide(verdict({ "sexual/minors": 0.06 })).action).toBe("review");
+  });
+});

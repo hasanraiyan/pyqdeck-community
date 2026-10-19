@@ -1,6 +1,6 @@
 import { Types, type HydratedDocument } from "mongoose";
 import { AppError } from "../../core/errors/AppError.js";
-import type { ContentModerator } from "../../core/ports/content-moderator.js";
+import { refusalMessage, type ContentModerator } from "../../core/ports/content-moderator.js";
 import type { LinkRewriter } from "../../core/ports/link-rewriter.js";
 import type { Notifier } from "../../core/ports/notifier.js";
 import { limitsOf, type ICommunity } from "../communities/community.model.js";
@@ -82,7 +82,12 @@ export class CommentService {
       source: "comment",
     });
     if (verdict.action === "reject") {
-      throw AppError.unprocessable("This comment cannot be posted because it may violate our community guidelines");
+      throw AppError.unprocessable(
+        refusalMessage(
+          verdict.categories,
+          "This comment cannot be posted because it may violate our community guidelines",
+        ),
+      );
     }
     const status = verdict.action === "allow" ? "published" : "pending";
 
@@ -192,7 +197,11 @@ export class CommentService {
       source: "comment",
       sourceId: comment.id,
     });
-    if (verdict.action === "reject") throw AppError.unprocessable("This comment may violate our community guidelines");
+    if (verdict.action === "reject") {
+      throw AppError.unprocessable(
+        refusalMessage(verdict.categories, "This comment may violate our community guidelines"),
+      );
+    }
 
     const heldRevision = verdict.action !== "allow" && comment.status === "published";
     await this.links.sync({

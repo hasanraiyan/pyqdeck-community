@@ -4,6 +4,7 @@ import { ModerationEventRepository } from "./moderation-event.repository.js";
 import { ModerationPolicy } from "./moderation.policy.js";
 import { ModerationService } from "./moderation.service.js";
 import type { ModerationProvider } from "./moderation.types.js";
+import { NoProfanityFilter, ProfanityFilter, DEFAULT_ALLOWED_WORDS, type ProfanityCheck } from "./profanity.js";
 import { OpenAiModerationProvider } from "./providers/openai.provider.js";
 import { PassthroughProvider } from "./providers/passthrough.provider.js";
 
@@ -17,9 +18,22 @@ function createProvider(): ModerationProvider {
   });
 }
 
+function createProfanityFilter(): ProfanityCheck {
+  if (!env.PROFANITY_FILTER) return new NoProfanityFilter();
+  return new ProfanityFilter({
+    extraWords: env.PROFANITY_EXTRA_WORDS,
+    allowedWords: [...DEFAULT_ALLOWED_WORDS, ...env.PROFANITY_ALLOWED_WORDS],
+  });
+}
+
 let service: ModerationService | undefined;
 export const getModerationService = () =>
-  (service ??= new ModerationService(createProvider(), new ModerationPolicy(), new ModerationEventRepository()));
+  (service ??= new ModerationService(
+    createProvider(),
+    new ModerationPolicy(),
+    new ModerationEventRepository(),
+    createProfanityFilter(),
+  ));
 
 /** Adapts the moderation service to the small text port that posts, comments and profiles depend on. */
 export const getContentModerator = (): ContentModerator => ({

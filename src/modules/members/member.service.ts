@@ -1,7 +1,7 @@
 import { randomBytes, randomInt } from "node:crypto";
 import type { HydratedDocument, Types } from "mongoose";
 import { AppError } from "../../core/errors/AppError.js";
-import type { ContentModerator } from "../../core/ports/content-moderator.js";
+import { refusalMessage, type ContentModerator } from "../../core/ports/content-moderator.js";
 import type { LinkRef, LinkRewriter } from "../../core/ports/link-rewriter.js";
 import type { MediaAttachments } from "../../core/ports/media-attachments.js";
 import { isDuplicateKeyError } from "../../core/utils/mongo.js";
@@ -248,7 +248,11 @@ export class MemberService {
     });
     if (verdict.degraded)
       throw AppError.serviceUnavailable("Checks are temporarily unavailable, please try again shortly");
-    if (verdict.action !== "allow") throw AppError.unprocessable("This text may violate our community guidelines");
+    if (verdict.action !== "allow") {
+      throw AppError.unprocessable(
+        refusalMessage(verdict.categories, "This text may violate our community guidelines"),
+      );
+    }
   }
 
   private adoptableHandle(username: string | null | undefined) {

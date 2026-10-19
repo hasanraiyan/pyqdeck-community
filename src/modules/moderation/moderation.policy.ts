@@ -10,6 +10,8 @@ export interface PolicyConfig {
    * provider's cut-off is not waved through. Set to 1 to turn the safety margin off.
    */
   nearMissScore: number;
+  /** Stricter (lower) safety margins for particular categories, e.g. sexual content. */
+  nearMissScores?: Record<string, number>;
 }
 
 /**
@@ -33,6 +35,8 @@ export const DEFAULT_POLICY: PolicyConfig = {
     "self-harm/intent": "review",
   },
   nearMissScore: 0.5,
+  // Sexual content is held for a person to look at from a much lower score, so a borderline picture is not waved through.
+  nearMissScores: { sexual: 0.25, "sexual/minors": 0.05 },
 };
 
 const ESCALATE_CATEGORIES = ["sexual/minors"];
@@ -61,7 +65,8 @@ export class ModerationPolicy {
     const nearMisses: string[] = [];
     for (const [category, score] of Object.entries(verdict.scores)) {
       const severity = this.config.categories[category] ?? this.unknownSeverity;
-      if (severity === "ignore" || verdict.categories[category] || score < this.config.nearMissScore) continue;
+      const margin = this.config.nearMissScores?.[category] ?? this.config.nearMissScore;
+      if (severity === "ignore" || verdict.categories[category] || score < margin) continue;
       nearMisses.push(category);
       reasons.push(`near_miss:${category}`);
     }

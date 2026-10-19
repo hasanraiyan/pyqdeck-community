@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { Types, type HydratedDocument } from "mongoose";
 import { AppError } from "../../core/errors/AppError.js";
-import type { ContentModerator, TextVerdict } from "../../core/ports/content-moderator.js";
+import { refusalMessage, type ContentModerator, type TextVerdict } from "../../core/ports/content-moderator.js";
 import type { LinkRewriter } from "../../core/ports/link-rewriter.js";
 import type { MediaAttachments } from "../../core/ports/media-attachments.js";
 import type { Notifier } from "../../core/ports/notifier.js";
@@ -541,7 +541,12 @@ export class PostService {
       sourceId,
     });
     if (verdict.action === "reject") {
-      throw AppError.unprocessable("This post cannot be published because it may violate our community guidelines");
+      throw AppError.unprocessable(
+        refusalMessage(
+          verdict.categories,
+          "This post cannot be published because it may violate our community guidelines",
+        ),
+      );
     }
     return verdict;
   }

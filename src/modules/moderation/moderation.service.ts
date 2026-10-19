@@ -1,5 +1,6 @@
 import { logger } from "../../core/utils/logger.js";
 import type { ModerationPolicy } from "./moderation.policy.js";
+import type { ProfanityCheck } from "./profanity.js";
 import {
   ModerationInputError,
   ModerationUnavailableError,
@@ -13,6 +14,9 @@ import {
 
 /** Bounds cost and latency: nobody needs 100k characters of a post checked, and the tail of a huge text is not scanned. */
 export const MAX_MODERATED_TEXT_CHARS = 10_000;
+
+/** Name stored in the audit trail when the local word filter, not the provider, made the decision. */
+export const PROFANITY_PROVIDER = "profanity-filter";
 
 const NOTHING_TO_CHECK: ModerationDecision = {
   action: "allow",
@@ -35,12 +39,28 @@ export class ModerationService {
     private readonly provider: ModerationProvider,
     private readonly policy: ModerationPolicy,
     private readonly audit?: ModerationAudit,
+    /** A free local word check that runs first. A hit refuses the content without calling the provider. */
+    private readonly profanity?: ProfanityCheck,
   ) {}
 
   async moderate(input: ModerationInput, context: ModerationContext): Promise<ModerationDecision> {
     const text = input.text?.trim().slice(0, MAX_MODERATED_TEXT_CHARS);
     const images = input.images ?? [];
     if (!text && images.length === 0) return NOTHING_TO_CHECK;
+
+    // Blocked words are refused here and now: no API call, no cost, and the images of the same submission are not
+    // sent either. Never logged with the text itself (NFR-SEC-4).
+    if (input.text && this.profanity?.contains(input.text)) {
+      const decision: ModerationDecision = {
+        action: "reject",
+        categories: ["profanity"],
+        reasons: ["profanity_filter"],
+        degraded: false,
+        escalate: false,
+      };
+      await this.record(context, decision, {}, PROFANITY_PROVIDER);
+      return decision;
+    }
 
     let verdict: ProviderVerdict;
     try {
@@ -50,6 +70,18 @@ export class ModerationService {
     }
 
     const decided = this.policy.decide(verdict);
+    // Scores only, never the content: lets the thresholds be tuned from what the provider really returned.
+    logger.info(
+      {
+        source: context.source,
+        action: decided.action,
+        top: Object.entries(verdict.scores)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([category, score]) => [category, Math.round(score * 1000) / 1000]),
+      },
+      "moderation verdict",
+    );
     const decision: ModerationDecision = { ...decided, degraded: false };
 
     if (decision.action !== "allow") {
@@ -77,7 +109,12 @@ export class ModerationService {
     return decision;
   }
 
-  private async record(context: ModerationContext, decision: ModerationDecision, scores: Record<string, number>) {
+  private async record(
+    context: ModerationContext,
+    decision: ModerationDecision,
+    scores: Record<string, number>,
+    providerName = this.provider.name,
+  ) {
     if (!this.audit) return;
     try {
       await this.audit.record({
@@ -87,7 +124,7 @@ export class ModerationService {
         escalate: decision.escalate,
         categories: decision.categories,
         scores,
-        provider: this.provider.name,
+        provider: providerName,
       });
     } catch (err) {
       // The audit trail is important but must never break moderation itself.

@@ -37,6 +37,30 @@ const schema = z.object({
   STORAGE_HEADROOM_PERCENT: z.coerce.number().min(0).max(50).default(5),
   // Content moderation (OpenAI Moderation API). Required in production so moderation can never be silently off.
   OPENAI_API_KEY: z.string().optional(),
+  // Local word filter that runs before the moderation API: a hit is refused without calling the API.
+  PROFANITY_FILTER: z
+    .string()
+    .default("true")
+    .transform((v) => v.trim().toLowerCase() !== "false"),
+  // Extra words to block / words to let through, comma separated (lower case).
+  PROFANITY_EXTRA_WORDS: z
+    .string()
+    .default("")
+    .transform((v) =>
+      v
+        .split(",")
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  PROFANITY_ALLOWED_WORDS: z
+    .string()
+    .default("")
+    .transform((v) =>
+      v
+        .split(",")
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean),
+    ),
   MODERATION_MODEL: z.string().default("omni-moderation-latest"),
   MODERATION_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(8000),
   // Which hosts this process serves: both (selected by hostname), only the JSON API, or only short-link redirects (NFR-PRT-2).

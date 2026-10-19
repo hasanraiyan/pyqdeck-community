@@ -259,6 +259,16 @@ for direct uploads) and register it in `providers/index.ts`. Nothing else change
 Everything users submit is checked by the OpenAI Moderation API (`omni-moderation-latest`, free to use) before it can be
 published. Images are already covered; posts and comments will use the same service.
 
+**A free word filter runs first.** Before any text goes to OpenAI it is checked locally against the
+[`bad-words`](https://www.npmjs.com/package/bad-words) list plus a short list of Hindi abuse written in English letters. A
+hit is refused at once with a plain message ("Your text contains language that is not allowed here..."), the OpenAI API
+is **not called**, and the images that came with that text are not sent either. It sees through simple tricks
+(`sh1t`, `f*ck`, `fuuuck`, `f u c k`, hidden characters), ignores links, and matches whole words, so "class" and
+"Scunthorpe" are fine. Words that are normal in a study community (`sex ratio`, `dyke` in civil engineering, `screw`,
+`rectum`, `hell`, `damn`, `god` ...) are allowed by default. Tune it with `PROFANITY_EXTRA_WORDS`,
+`PROFANITY_ALLOWED_WORDS` (comma separated, lower case) or switch it off with `PROFANITY_FILTER=false`. The refusal is
+recorded (who, where, "profanity") without storing the words. It is a first pass, not a replacement for the AI check.
+
 **What happens to bad content**
 
 | Situation                                                                                         | Result                                                                 |

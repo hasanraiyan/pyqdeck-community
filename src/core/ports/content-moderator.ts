@@ -17,6 +17,13 @@ export interface TextVerdict {
   categories: string[];
 }
 
+/** What to tell the person when content is refused: bad language gets a plain, fixable message. */
+export function refusalMessage(categories: string[], fallback: string): string {
+  return categories.includes("profanity")
+    ? "Your text contains language that is not allowed here. Please edit it and try again."
+    : fallback;
+}
+
 export interface ContentModerator {
   moderateText(text: string, context: TextModerationContext): Promise<TextVerdict>;
 }
