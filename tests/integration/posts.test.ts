@@ -100,6 +100,16 @@ describe("creating posts", () => {
     expect(second.id).toBe(first.id);
     expect(await PostModel.countDocuments()).toBe(1);
   });
+
+  it("does not hand back, or re-create, a post that was deleted before the retry arrived", async () => {
+    const send = () => alice().post("/posts", { body: "gone soon" }).set("Idempotency-Key", "key-del");
+    const first = (await send().expect(201)).body.data;
+    await alice().del(`/posts/${first.id}`).expect(204);
+
+    await send().expect(409);
+    expect(await PostModel.countDocuments()).toBe(1);
+    expect(await PostModel.countDocuments({ status: "published" })).toBe(0);
+  });
 });
 
 describe("moderation of new posts", () => {

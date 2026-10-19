@@ -79,7 +79,14 @@ export class PostService {
     if (input.idempotencyKey) {
       const existingId = await this.idempotency.find(community._id, member._id, "post", input.idempotencyKey);
       const existing = existingId && (await this.repository.findByIdIn(community._id, existingId));
-      if (existing) return existing; // a retry after a lost response: hand back the original
+      if (existing) {
+        // A retry after a lost response gets the original back, unless the author has deleted it since: handing back a
+        // deleted post as a success would be wrong, and creating it again would undo the delete.
+        if (existing.status === "deleted") {
+          throw AppError.conflict("This post was already created and has since been deleted");
+        }
+        return existing;
+      }
     }
 
     const verdict = await this.checkText(community, member, body, "post");
@@ -521,6 +528,12 @@ export class PostService {
   }
 
   // --------------------------------------------------------------- helpers
+
+  /** For comments: the post must still exist, in any state but deleted. */
+  async assertNotDeleted(community: CommunityDoc, postId: Types.ObjectId): Promise<void> {
+    const post = await this.repository.findByIdIn(community._id, postId);
+    if (!post || post.status === "deleted") throw AppError.notFound("Post not found");
+  }
 
   private counts = async (community: CommunityDoc, postId: Types.ObjectId) => {
     const post = await this.repository.findByIdIn(community._id, postId);

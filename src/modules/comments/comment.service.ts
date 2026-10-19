@@ -25,6 +25,8 @@ export interface PostAccess {
     idOrSlug: string,
   ): Promise<{ _id: Types.ObjectId; id: string; authorId: Types.ObjectId }>;
   adjustComments(communityId: Types.ObjectId, postId: Types.ObjectId, delta: number): Promise<unknown>;
+  /** 404 when the post is gone or deleted (any other state passes). */
+  assertNotDeleted(community: CommunityDoc, postId: Types.ObjectId): Promise<void>;
 }
 
 export interface CreateCommentInput {
@@ -54,13 +56,19 @@ export class CommentService {
       throw AppError.badRequest(`Comments can be at most ${limits.commentMaxChars} characters`);
     }
 
+    // The post is checked first, so a retry never answers for a post that has since been deleted or hidden.
+    const post = await this.posts.findCommentable(community, member, postIdOrSlug);
+
     if (input.idempotencyKey) {
       const id = await this.idempotency.find(community._id, member._id, "comment", input.idempotencyKey);
       const existing = id && (await this.repository.findByIdIn(community._id, id));
-      if (existing) return existing;
+      if (existing) {
+        if (existing.status === "deleted") {
+          throw AppError.conflict("This comment was already created and has since been deleted");
+        }
+        return existing;
+      }
     }
-
-    const post = await this.posts.findCommentable(community, member, postIdOrSlug);
 
     // A reply to a reply is stored under the thread's top-level comment and remembers who it answers (FR-CMT-3).
     let rootId: Types.ObjectId | null = null;
@@ -232,6 +240,7 @@ export class CommentService {
     const comment = await this.findLive(community, commentId);
     const isAuthor = comment.authorId.equals(actor._id);
     const isStaff = actor.role !== "member";
+    if (isAuthor) await this.assertPostNotDeleted(community, comment);
     let by: NonNullable<IComment["deletedBy"]> = isAuthor ? "author" : "moderator";
     if (!isAuthor && !isStaff) {
       const post = await this.posts.findCommentable(community, actor, comment.postId.toString()).catch(() => null);
@@ -401,7 +410,15 @@ export class CommentService {
   private async own(community: CommunityDoc, member: MemberDoc, id: string) {
     const comment = await this.findLive(community, id);
     if (!comment.authorId.equals(member._id)) throw AppError.notFound("Comment not found");
+    await this.assertPostNotDeleted(community, comment);
     return comment;
+  }
+
+  /** A comment under a deleted post is gone for its author too (staff can still clean it up). */
+  private async assertPostNotDeleted(community: CommunityDoc, comment: CommentDoc) {
+    await this.posts.assertNotDeleted(community, comment.postId).catch(() => {
+      throw AppError.notFound("Comment not found");
+    });
   }
 
   /** A comment the viewer may see: published (or their own), on a post they may see, by someone not blocked. */

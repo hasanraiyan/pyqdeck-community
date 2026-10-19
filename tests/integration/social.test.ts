@@ -170,6 +170,31 @@ describe("comments", () => {
     expect(await CommentModel.countDocuments()).toBe(1);
   });
 
+  it("does not answer a retried create with a comment that was deleted since, nor for a deleted post", async () => {
+    const post = await publish();
+    const send = () => bob().post(`/posts/${post.id}/comments`, { body: "once" }).set("Idempotency-Key", "kd");
+    const made = (await send().expect(201)).body.data;
+    await bob().del(`/comments/${made.id}`).expect(204);
+    await send().expect(409);
+    expect(await CommentModel.countDocuments({ status: { $ne: "deleted" } })).toBe(0);
+
+    const other = await publish(alice(), "another");
+    const sendOther = () => bob().post(`/posts/${other.id}/comments`, { body: "hi" }).set("Idempotency-Key", "kp");
+    await sendOther().expect(201);
+    await alice().del(`/posts/${other.id}`).expect(204);
+    await sendOther().expect(404);
+  });
+
+  it("lets nobody but staff touch a comment under a deleted post", async () => {
+    const post = await publish();
+    const c = await comment(bob(), post.id, "under a post that will go");
+    await alice().del(`/posts/${post.id}`).expect(204);
+
+    await bob().patch(`/comments/${c.id}`, { body: "edited" }).expect(404);
+    await bob().del(`/comments/${c.id}`).expect(404);
+    expect((await CommentModel.findById(c.id))!.body).toBe("under a post that will go");
+  });
+
   it("notifies the post author of a comment and the answered member of a reply, not themselves", async () => {
     const post = await publish();
     const root = await comment(bob(), post.id, "nice post");
