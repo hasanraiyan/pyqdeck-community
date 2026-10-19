@@ -25,7 +25,7 @@ export class StorageAccountRepository extends BaseRepository<IStorageAccount> im
           $expr: { $lte: [{ $add: ["$usedBytes", sizeBytes] }, { $multiply: ["$capacityBytes", 1 - this.headroom] }] },
         },
         { $inc: { usedBytes: sizeBytes } },
-        { sort: { priority: 1, createdAt: 1 }, new: true },
+        { sort: { priority: 1, createdAt: 1 }, returnDocument: "after" },
       )
       .select("+credentials")
       .exec();

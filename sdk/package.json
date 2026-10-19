@@ -1,0 +1,26 @@
+{
+  "name": "@pyqdeck/community-sdk",
+  "version": "0.1.0",
+  "description": "Typed client for the PYQDeck Community API (posts, comments, members, links). No Clerk, React or cache inside: the app supplies the token and owns caching.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "~6.0.0"
+  }
+}

@@ -1,17 +1,17 @@
 import { Router } from "express";
 import { validate } from "../../core/middleware/validate.js";
-import { requireAuth, requireRole } from "../auth/auth.middleware.js";
+import { requirePlatformAdmin } from "../auth/auth.middleware.js";
 import { StorageAdminController } from "./storage-admin.controller.js";
 import type { StorageAdminService } from "./storage-admin.service.js";
 import { getStorageAdminService } from "./storage.module.js";
 import { accountIdParamSchema, createAccountSchema, updateAccountSchema } from "./storage.schema.js";
 
-/** Admin-only. `requireRole()` with no roles lets only admins through. */
+/** Platform admins only. */
 export function createStorageRoutes(service: StorageAdminService = getStorageAdminService()) {
   const router = Router();
   const controller = new StorageAdminController(service);
 
-  router.use(requireAuth, requireRole());
+  router.use(requirePlatformAdmin);
   router.get("/providers", controller.providers);
   router.get("/accounts", controller.list);
   router.post("/accounts", validate({ body: createAccountSchema }), controller.add);

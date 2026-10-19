@@ -38,3 +38,6 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Build SDK
+        run: pnpm exec tsc -p sdk/tsconfig.json

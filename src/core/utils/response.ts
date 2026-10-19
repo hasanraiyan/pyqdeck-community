@@ -13,3 +13,9 @@ export function sendPaginated(res: Response, items: unknown[], pagination: PageM
 export function sendNoContent(res: Response) {
   res.status(StatusCodes.NO_CONTENT).send();
 }
+
+export function sendCursorPage(res: Response, items: unknown[], page: { nextCursor: string | null; hasMore: boolean }) {
+  res
+    .status(StatusCodes.OK)
+    .json({ success: true, data: items, pagination: { nextCursor: page.nextCursor, hasMore: page.hasMore } });
+}

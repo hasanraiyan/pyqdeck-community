@@ -5,6 +5,7 @@ import { Schema, model, type Types } from "mongoose";
  * does not become a store of the very material that was rejected.
  */
 export interface IModerationEvent {
+  communityId?: Types.ObjectId;
   userId?: Types.ObjectId;
   source: string;
   sourceId?: string;
@@ -20,7 +21,8 @@ export interface IModerationEvent {
 const RETENTION_SECONDS = 90 * 24 * 60 * 60;
 
 const moderationEventSchema = new Schema<IModerationEvent>({
-  userId: { type: Schema.Types.ObjectId, ref: "User", index: true },
+  communityId: { type: Schema.Types.ObjectId, ref: "Community", index: true },
+  userId: { type: Schema.Types.ObjectId, ref: "Member", index: true },
   source: { type: String, required: true, index: true },
   sourceId: { type: String },
   action: { type: String, enum: ["review", "reject"], required: true, index: true },

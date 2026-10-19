@@ -7,14 +7,14 @@ export class MediaRepository extends BaseRepository<IMedia> {
     super(MediaModel);
   }
 
-  findPendingOwnedBy(ids: string[], owner: string) {
-    return this.model.find({ _id: { $in: ids }, owner, status: "pending" }).exec();
+  findPendingOwnedBy(ids: string[], owner: string, communityId: string) {
+    return this.model.find({ _id: { $in: ids }, owner, communityId, status: "pending" }).exec();
   }
 
   /** Returns how many were actually claimed; the status filter makes a double-claim impossible. */
-  async markAttached(ids: string[], owner: string): Promise<number> {
+  async markAttached(ids: string[], owner: string, communityId: string): Promise<number> {
     const result = await this.model
-      .updateMany({ _id: { $in: ids }, owner, status: "pending" }, { status: "attached" })
+      .updateMany({ _id: { $in: ids }, owner, communityId, status: "pending" }, { status: "attached" })
       .exec();
     return result.modifiedCount;
   }
@@ -33,7 +33,7 @@ export class MediaRepository extends BaseRepository<IMedia> {
   /** Flips `uploading` to `pending` exactly once. Null if it was not uploading (e.g. completed by a parallel call). */
   completeUpload(id: string, data: Pick<IMedia, "url" | "size" | "mimeType">) {
     return this.model
-      .findOneAndUpdate({ _id: id, status: "uploading" }, { ...data, status: "pending" }, { new: true })
+      .findOneAndUpdate({ _id: id, status: "uploading" }, { ...data, status: "pending" }, { returnDocument: "after" })
       .exec();
   }
 

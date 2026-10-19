@@ -2,6 +2,7 @@ import { Types } from "mongoose";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { addClerkUser, as, clerkUsers } from "../helpers/clerk.js";
+import { communityIdOf, seedCommunity } from "../helpers/community.js";
 import { clearTestDb, connectTestDb, disconnectTestDb } from "../helpers/db.js";
 import { GIF, PNG, pngOfSize } from "../helpers/images.js";
 import { providerOf } from "../helpers/storage.js";
@@ -13,7 +14,7 @@ const { MediaModel } = await import("../../src/modules/media/media.model.js");
 const { getMediaService } = await import("../../src/modules/media/media.module.js");
 const { StorageAccountModel } = await import("../../src/modules/storage/storage-account.model.js");
 const { getStorageAdminService } = await import("../../src/modules/storage/storage.module.js");
-const { UserModel } = await import("../../src/modules/users/user.model.js");
+const { MemberModel } = await import("../../src/modules/members/member.model.js");
 
 const app = createApp();
 const GB = 1024 ** 3;
@@ -30,7 +31,7 @@ const addAccount = (name: string, over: { priority?: number; capacityBytes?: num
 const accountState = async (name: string) => (await StorageAccountModel.findOne({ name }))!;
 
 const userId = async (clerkId: string) =>
-  (await request(app).get("/api/users/me").set(as(clerkId)).expect(200)).body.data.id as string;
+  (await request(app).get("/api/v1/communities/beu/members/me").set(as(clerkId)).expect(200)).body.data.id as string;
 
 type Ticket = {
   id: string;
@@ -38,11 +39,12 @@ type Ticket = {
 };
 
 const requestTickets = (clerkId: string | null, files: Array<{ mimeType: string; size: number }>) => {
-  let req = request(app).post("/api/media/uploads");
+  let req = request(app).post("/api/v1/communities/beu/media/uploads");
   if (clerkId) req = req.set(as(clerkId));
   return req.send({ files });
 };
-const complete = (clerkId: string, id: string) => request(app).post(`/api/media/${id}/complete`).set(as(clerkId));
+const complete = (clerkId: string, id: string) =>
+  request(app).post(`/api/v1/communities/beu/media/${id}/complete`).set(as(clerkId));
 const png = (size = PNG.length) => ({ mimeType: "image/png", size });
 
 /** Asks for one ticket, then plays the app: uploads `data` straight to the provider under the ticket's key. */
@@ -55,18 +57,19 @@ const startAndUpload = async (data: Buffer, opts: { declared?: number; mimeType?
 
 beforeAll(async () => {
   await connectTestDb();
-  await Promise.all([UserModel.init(), StorageAccountModel.init(), MediaModel.init()]);
+  await Promise.all([MemberModel.init(), StorageAccountModel.init(), MediaModel.init()]);
 });
 afterAll(disconnectTestDb);
 beforeEach(async () => {
   await clearTestDb();
+  await seedCommunity();
   clerkUsers.clear();
   addClerkUser("user_a", { email: "alice@example.com" });
   addClerkUser("user_b", { email: "bob@example.com" });
   await addAccount("primary");
 });
 
-describe("POST /api/media/uploads", () => {
+describe("POST /api/v1/communities/beu/media/uploads", () => {
   it("requires sign-in", async () => {
     await requestTickets(null, [png()]).expect(401);
   });
@@ -125,7 +128,7 @@ describe("POST /api/media/uploads", () => {
   });
 });
 
-describe("POST /api/media/:id/complete", () => {
+describe("POST /api/v1/communities/beu/media/:id/complete", () => {
   it("confirms an upload and exposes it as pending, with the real size and a public URL", async () => {
     const ticket = await startAndUpload(PNG);
 
@@ -201,7 +204,7 @@ describe("POST /api/media/:id/complete", () => {
   it("hides other people's uploads behind a 404 and requires sign-in", async () => {
     const ticket = await startAndUpload(PNG);
     await complete("user_b", ticket.id).expect(404);
-    await request(app).post(`/api/media/${ticket.id}/complete`).expect(401);
+    await request(app).post(`/api/v1/communities/beu/media/${ticket.id}/complete`).expect(401);
     await complete("user_a", "000000000000000000000000").expect(404);
     expect((await MediaModel.findById(ticket.id))!.status).toBe("uploading");
   });
@@ -210,9 +213,9 @@ describe("POST /api/media/:id/complete", () => {
     const ticket = await startAndUpload(PNG);
     await complete("user_a", ticket.id).expect(200);
 
-    await getMediaService().attach(await userId("user_a"), [ticket.id]);
+    await getMediaService().attach(await communityIdOf(), await userId("user_a"), [ticket.id]);
 
-    await request(app).delete(`/api/media/${ticket.id}`).set(as("user_a")).expect(409);
+    await request(app).delete(`/api/v1/communities/beu/media/${ticket.id}`).set(as("user_a")).expect(409);
   });
 });
 
@@ -220,7 +223,7 @@ describe("abandoned direct uploads", () => {
   it("lets the owner cancel a ticket, refunding the reservation", async () => {
     const ticket = await startAndUpload(PNG, { declared: 5000 });
 
-    await request(app).delete(`/api/media/${ticket.id}`).set(as("user_a")).expect(204);
+    await request(app).delete(`/api/v1/communities/beu/media/${ticket.id}`).set(as("user_a")).expect(204);
 
     expect(await MediaModel.countDocuments()).toBe(0);
     expect((await accountState("primary")).usedBytes).toBe(0);

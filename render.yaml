@@ -1,0 +1,40 @@
+# Render blueprint: one Docker web service that serves both hosts
+# (community-api.pyqdeck.in and go.pyqdeck.in). Secrets are set in the dashboard, never here.
+services:
+  - type: web
+    name: pyqdeck-community
+    runtime: docker
+    plan: free # move to a paid always-on instance at launch: the free one sleeps after 15 minutes idle
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SERVE_MODE
+        value: all
+      - key: LINK_HOST
+        value: go.pyqdeck.in
+      - key: TRUST_PROXY
+        value: "1"
+      - key: SEED_COMMUNITIES
+        value: beu
+      - key: CORS_ORIGIN
+        value: "*" # tighten to your web origins if you add a web client; native apps do not send an Origin
+      - key: LOG_LEVEL
+        value: info
+      - key: MODERATION_MODEL
+        value: omni-moderation-latest
+      # Set these in the Render dashboard (sync: false keeps them out of git):
+      - key: MONGODB_URI
+        sync: false
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_WEBHOOK_SIGNING_SECRET
+        sync: false
+      - key: COMMUNITY_ADMIN_EMAILS
+        sync: false
+      - key: STORAGE_ENCRYPTION_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false

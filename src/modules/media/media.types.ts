@@ -32,6 +32,7 @@ export interface UploadedFile {
 
 export interface Actor {
   id: string;
+  communityId: string;
   role: "member" | "moderator" | "admin";
 }
 
@@ -66,6 +67,6 @@ export type ModeratedImage = { url: string } | { data: Buffer; mimeType: string 
 export interface ImageModerator {
   check(
     image: ModeratedImage,
-    context: { userId: string; sourceId?: string },
+    context: { communityId: string; userId: string; sourceId?: string },
   ): Promise<{ allowed: boolean; unavailable: boolean }>;
 }

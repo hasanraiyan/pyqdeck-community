@@ -7,11 +7,14 @@ export default defineConfig({
       NODE_ENV: "test",
       LOG_LEVEL: "silent",
       COMMUNITY_ADMIN_EMAILS: "boss@example.com",
+      RATE_LIMIT_SCALE: "1000",
       CLERK_WEBHOOK_SIGNING_SECRET: "whsec_test",
       STORAGE_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
       // never actually connected to; integration tests connect to the in-memory server explicitly
       MONGODB_URI: "mongodb://127.0.0.1:27017/unused",
     },
+    // Forked workers crash intermittently on Windows with exit code 3221226505 (a native fast-fail); threads do not.
+    pool: "threads",
     testTimeout: 20_000,
     hookTimeout: 120_000, // first integration run downloads the mongod binary
     coverage: {

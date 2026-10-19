@@ -47,8 +47,13 @@ export class MediaService {
    * Blocks anything that is not clearly fine. A moderation outage is a 503 (retry shortly), never a silent pass, so
    * unchecked images cannot slip through while the checker is down.
    */
-  private async assertImageAllowed(image: ModeratedImage, userId: string, sourceId?: string): Promise<void> {
-    const verdict = await this.moderator.check(image, { userId, sourceId });
+  private async assertImageAllowed(
+    image: ModeratedImage,
+    communityId: string,
+    userId: string,
+    sourceId?: string,
+  ): Promise<void> {
+    const verdict = await this.moderator.check(image, { communityId, userId, sourceId });
     if (verdict.unavailable) {
       throw AppError.serviceUnavailable("Image checks are temporarily unavailable, please try again shortly");
     }
@@ -62,6 +67,7 @@ export class MediaService {
    * signed ticket is returned per file, so the bytes go app -> provider and never through this server.
    */
   async requestUploads(
+    communityId: string,
     ownerId: string,
     declared: DeclaredFile[],
   ): Promise<Array<{ media: MediaDoc; ticket: UploadTicket }>> {
@@ -96,6 +102,7 @@ export class MediaService {
         });
         try {
           const media = await this.repository.create({
+            communityId: new Types.ObjectId(communityId),
             owner: new Types.ObjectId(ownerId),
             accountId: new Types.ObjectId(reserved.accountId),
             provider: reserved.provider,
@@ -129,10 +136,12 @@ export class MediaService {
    * Direct upload, step 2. The app says it finished; we do not take its word. The provider is asked what actually
    * arrived, and anything bigger than declared or not an allowed image is deleted. Safe to call twice.
    */
-  async complete(ownerId: string, mediaId: string): Promise<MediaDoc> {
+  async complete(communityId: string, ownerId: string, mediaId: string): Promise<MediaDoc> {
     const media = await this.repository.findById(mediaId);
     // Same 404 for "not yours" and "does not exist" so ids cannot be probed.
-    if (!media || media.owner.toString() !== ownerId) throw AppError.notFound("Media not found");
+    if (!media || media.owner.toString() !== ownerId || media.communityId.toString() !== communityId) {
+      throw AppError.notFound("Media not found");
+    }
     if (media.status !== "uploading") return media;
 
     const found = await this.storage.inspect({ accountId: media.accountId.toString(), key: media.key });
@@ -146,7 +155,7 @@ export class MediaService {
     // The file is already at the provider, so a rejected image must be deleted. A moderation outage must not delete
     // it: the app can simply call complete again once checks are back.
     try {
-      await this.assertImageAllowed({ url: found.url }, ownerId, media.id);
+      await this.assertImageAllowed({ url: found.url }, communityId, ownerId, media.id);
     } catch (err) {
       if (err instanceof AppError && err.statusCode === StatusCodes.UNPROCESSABLE_ENTITY) await this.discard(media);
       throw err;
@@ -168,7 +177,7 @@ export class MediaService {
   }
 
   /** All-or-nothing: every file is validated before any is stored, and a failure part-way removes what was stored. */
-  async upload(ownerId: string, files: UploadedFile[]): Promise<MediaDoc[]> {
+  async upload(communityId: string, ownerId: string, files: UploadedFile[]): Promise<MediaDoc[]> {
     if (files.length === 0) throw AppError.badRequest("No files uploaded");
     if (files.length > MAX_MEDIA_PER_POST)
       throw AppError.badRequest(`At most ${MAX_MEDIA_PER_POST} images are allowed`);
@@ -179,7 +188,9 @@ export class MediaService {
 
     // Checked before anything is stored, so a rejected image never reaches the storage provider at all.
     await Promise.all(
-      validated.map(({ file, mimeType }) => this.assertImageAllowed({ data: file.buffer, mimeType }, ownerId)),
+      validated.map(({ file, mimeType }) =>
+        this.assertImageAllowed({ data: file.buffer, mimeType }, communityId, ownerId),
+      ),
     );
 
     const settled = await Promise.allSettled(
@@ -192,6 +203,7 @@ export class MediaService {
         });
         try {
           return await this.repository.create({
+            communityId: new Types.ObjectId(communityId),
             owner: new Types.ObjectId(ownerId),
             accountId: new Types.ObjectId(stored.accountId),
             provider: stored.provider,
@@ -221,20 +233,31 @@ export class MediaService {
     return created;
   }
 
-  /** Called by the posts module when a post is created: claims pending uploads so cleanup leaves them alone. */
-  async attach(ownerId: string, ids: string[]): Promise<void> {
+  /**
+   * Called by posts, comments and profiles: claims confirmed uploads so cleanup leaves them alone, and returns their
+   * public URLs in the order given.
+   */
+  async attach(communityId: string, ownerId: string, ids: string[]): Promise<Array<{ id: string; url: string }>> {
     const unique = [...new Set(ids)];
-    if (unique.length === 0) return;
+    if (unique.length === 0) return [];
     if (unique.length > MAX_MEDIA_PER_POST) throw AppError.badRequest(`At most ${MAX_MEDIA_PER_POST} images per post`);
     if (!unique.every((id) => Types.ObjectId.isValid(id))) throw AppError.badRequest("Invalid media id");
 
-    const claimable = await this.repository.findPendingOwnedBy(unique, ownerId);
+    const claimable = await this.repository.findPendingOwnedBy(unique, ownerId, communityId);
     if (claimable.length !== unique.length) {
       throw AppError.badRequest("Some images are missing, belong to someone else, or are already used");
     }
-    if ((await this.repository.markAttached(unique, ownerId)) !== unique.length) {
+    if ((await this.repository.markAttached(unique, ownerId, communityId)) !== unique.length) {
       throw AppError.conflict("Images were claimed by another request");
     }
+    const byId = new Map(claimable.map((m) => [m.id as string, m.url]));
+    return unique.map((id) => ({ id, url: byId.get(id) ?? "" }));
+  }
+
+  /** Public URLs for ids that are already attached (used when rendering content). */
+  async urlsFor(ids: string[]): Promise<Array<{ id: string; url: string }>> {
+    const docs = await this.repository.findByIds(ids.filter((id) => Types.ObjectId.isValid(id)));
+    return docs.map((d) => ({ id: d.id as string, url: d.url }));
   }
 
   /** Called by the posts module when a post is deleted. Removes the files and their records. */
@@ -248,7 +271,13 @@ export class MediaService {
     const media = await this.repository.findById(id);
     const isStaff = actor.role === "moderator" || actor.role === "admin";
     // Same 404 for "not yours" and "does not exist" so ids cannot be probed.
-    if (!media || (media.owner.toString() !== actor.id && !isStaff)) throw AppError.notFound("Media not found");
+    if (
+      !media ||
+      media.communityId.toString() !== actor.communityId ||
+      (media.owner.toString() !== actor.id && !isStaff)
+    ) {
+      throw AppError.notFound("Media not found");
+    }
     if (media.status === "attached") throw AppError.conflict("This image is used by a post; delete the post instead");
     await this.discard(media);
   }

@@ -7,7 +7,7 @@ vi.mock("@clerk/express", async () => (await import("../helpers/clerk.js")).cler
 
 const { createApp } = await import("../../src/app.js");
 const { StorageAccountModel } = await import("../../src/modules/storage/storage-account.model.js");
-const { UserModel } = await import("../../src/modules/users/user.model.js");
+const { AccountModel } = await import("../../src/modules/accounts/account.model.js");
 
 const app = createApp();
 const GB = 1024 ** 3;
@@ -21,7 +21,7 @@ const memoryAccount = (over: Record<string, unknown> = {}) => ({
 
 beforeAll(async () => {
   await connectTestDb();
-  await UserModel.init();
+  await AccountModel.init();
   await StorageAccountModel.init();
 });
 afterAll(disconnectTestDb);
@@ -34,21 +34,21 @@ beforeEach(async () => {
 
 describe("access control", () => {
   it("401 for anonymous callers", async () => {
-    await request(app).get("/api/admin/storage/accounts").expect(401);
+    await request(app).get("/api/v1/admin/storage/accounts").expect(401);
   });
 
   it("403 for members", async () => {
-    await request(app).get("/api/admin/storage/accounts").set(as("user_member")).expect(403);
-    await request(app).post("/api/admin/storage/accounts").set(as("user_member")).send(memoryAccount()).expect(403);
+    await request(app).get("/api/v1/admin/storage/accounts").set(as("user_member")).expect(403);
+    await request(app).post("/api/v1/admin/storage/accounts").set(as("user_member")).send(memoryAccount()).expect(403);
   });
 
   it("allows admins", async () => {
-    await request(app).get("/api/admin/storage/accounts").set(as("user_admin")).expect(200);
+    await request(app).get("/api/v1/admin/storage/accounts").set(as("user_admin")).expect(200);
   });
 });
 
-describe("POST /api/admin/storage/accounts (plugging in a new account)", () => {
-  const add = (body: object) => request(app).post("/api/admin/storage/accounts").set(as("user_admin")).send(body);
+describe("POST /api/v1/admin/storage/accounts (plugging in a new account)", () => {
+  const add = (body: object) => request(app).post("/api/v1/admin/storage/accounts").set(as("user_admin")).send(body);
 
   it("creates an account without ever returning credentials", async () => {
     const res = await add(memoryAccount({ credentials: { quotaBytes: 500 } })).expect(201);
@@ -97,21 +97,26 @@ describe("POST /api/admin/storage/accounts (plugging in a new account)", () => {
 
 describe("listing and updating", () => {
   const createdId = async (over: Record<string, unknown> = {}) =>
-    (await request(app).post("/api/admin/storage/accounts").set(as("user_admin")).send(memoryAccount(over)).expect(201))
-      .body.data.id as string;
+    (
+      await request(app)
+        .post("/api/v1/admin/storage/accounts")
+        .set(as("user_admin"))
+        .send(memoryAccount(over))
+        .expect(201)
+    ).body.data.id as string;
 
   const patch = (id: string, body: object) =>
-    request(app).patch(`/api/admin/storage/accounts/${id}`).set(as("user_admin")).send(body);
+    request(app).patch(`/api/v1/admin/storage/accounts/${id}`).set(as("user_admin")).send(body);
 
   it("lists accounts in fill order", async () => {
     await createdId({ name: "late", priority: 9 });
     await createdId({ name: "early", priority: 1 });
-    const res = await request(app).get("/api/admin/storage/accounts").set(as("user_admin")).expect(200);
+    const res = await request(app).get("/api/v1/admin/storage/accounts").set(as("user_admin")).expect(200);
     expect(res.body.data.map((a: { name: string }) => a.name)).toEqual(["early", "late"]);
   });
 
   it("lists the supported provider types", async () => {
-    const res = await request(app).get("/api/admin/storage/providers").set(as("user_admin")).expect(200);
+    const res = await request(app).get("/api/v1/admin/storage/providers").set(as("user_admin")).expect(200);
     expect(res.body.data).toEqual(expect.arrayContaining(["cloudinary", "memory"]));
   });
 
@@ -135,7 +140,7 @@ describe("listing and updating", () => {
     await StorageAccountModel.updateOne({ _id: id }, { usedBytes: 999_999, status: "full" });
 
     const res = await request(app)
-      .post(`/api/admin/storage/accounts/${id}/refresh-usage`)
+      .post(`/api/v1/admin/storage/accounts/${id}/refresh-usage`)
       .set(as("user_admin"))
       .expect(200);
 

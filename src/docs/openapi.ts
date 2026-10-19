@@ -1,21 +1,26 @@
 import { moderationPaths } from "../modules/moderation/moderation.docs.js";
 import { mediaPaths } from "../modules/media/media.docs.js";
 import { storagePaths } from "../modules/storage/storage.docs.js";
-import { userPaths } from "../modules/users/user.docs.js";
+import { communityPaths, scopePaths } from "./community.docs.js";
 import { healthPaths } from "../modules/health/health.docs.js";
 
 /** Register each module's `<feature>.docs.ts` paths here. */
 const paths = {
   ...healthPaths,
-  ...userPaths,
-  ...mediaPaths,
-  ...moderationPaths,
-  ...storagePaths,
+  ...communityPaths,
+  ...scopePaths(mediaPaths as never, "/v1/communities/{community}", true),
+  ...scopePaths(moderationPaths as never, "/v1/communities/{community}", true),
+  ...scopePaths(storagePaths as never, "/v1", false),
 };
 
 export const openApiSpec = {
   openapi: "3.0.3",
-  info: { title: "PYQDeck Community API", version: "1.0.0" },
+  info: {
+    title: "PYQDeck Community API",
+    version: "1.0.0",
+    description:
+      "One service, many communities (beu, gate, ...). Everything except health and platform admin lives under /v1/communities/{community}. Short links are served separately from the link host (go.pyqdeck.in).",
+  },
   servers: [{ url: "/api" }],
   paths,
   components: {
@@ -54,6 +59,11 @@ export const openApiSpec = {
           success: { type: "boolean", example: false },
           message: { type: "string" },
           details: {},
+          code: {
+            type: "string",
+            example: "not_found",
+            description: "Stable machine-readable code, derived from the HTTP status",
+          },
           requestId: { type: "string", format: "uuid" },
         },
       },

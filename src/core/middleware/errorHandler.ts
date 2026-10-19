@@ -42,6 +42,10 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   res.status(status).json({
     success: false,
     message: safeMessage,
+    // Stable, machine-readable: clients branch on this, never on the message text (IR-SDK-10).
+    code: getReasonPhrase(status)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_"),
     requestId: req.id,
     ...(details !== undefined && { details }),
     ...(env.NODE_ENV === "development" && isServerError && { stack: err?.stack }),

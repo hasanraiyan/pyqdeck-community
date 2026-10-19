@@ -2,6 +2,7 @@ import { Types } from "mongoose";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { addClerkUser, as, clerkUsers } from "../helpers/clerk.js";
+import { communityIdOf, seedCommunity } from "../helpers/community.js";
 import { clearTestDb, connectTestDb, disconnectTestDb } from "../helpers/db.js";
 import { GIF, PDF, PNG, WEBP, pngOfSize } from "../helpers/images.js";
 
@@ -12,7 +13,7 @@ const { MediaModel } = await import("../../src/modules/media/media.model.js");
 const { getMediaService } = await import("../../src/modules/media/media.module.js");
 const { StorageAccountModel } = await import("../../src/modules/storage/storage-account.model.js");
 const { getStorageAdminService } = await import("../../src/modules/storage/storage.module.js");
-const { UserModel } = await import("../../src/modules/users/user.model.js");
+const { MemberModel } = await import("../../src/modules/members/member.model.js");
 
 const app = createApp();
 const GB = 1024 ** 3;
@@ -30,29 +31,30 @@ const accountState = async (name: string) => (await StorageAccountModel.findOne(
 
 type Upload = { data: Buffer; filename?: string };
 const upload = (clerkId: string | null, files: Upload[]) => {
-  let req = request(app).post("/api/media");
+  let req = request(app).post("/api/v1/communities/beu/media");
   if (clerkId) req = req.set(as(clerkId));
   for (const f of files) req = req.attach("files", f.data, { filename: f.filename ?? "photo.png" });
   return req;
 };
 
 const userId = async (clerkId: string) =>
-  (await request(app).get("/api/users/me").set(as(clerkId)).expect(200)).body.data.id as string;
+  (await request(app).get("/api/v1/communities/beu/members/me").set(as(clerkId)).expect(200)).body.data.id as string;
 
 beforeAll(async () => {
   await connectTestDb();
-  await Promise.all([UserModel.init(), StorageAccountModel.init(), MediaModel.init()]);
+  await Promise.all([MemberModel.init(), StorageAccountModel.init(), MediaModel.init()]);
 });
 afterAll(disconnectTestDb);
 beforeEach(async () => {
   await clearTestDb();
+  await seedCommunity();
   clerkUsers.clear();
   addClerkUser("user_a", { email: "alice@example.com" });
   addClerkUser("user_b", { email: "bob@example.com" });
   addClerkUser("user_admin", { email: "boss@example.com" });
 });
 
-describe("POST /api/media", () => {
+describe("POST /api/v1/communities/beu/media", () => {
   beforeEach(async () => {
     await addAccount("primary");
   });
@@ -94,7 +96,7 @@ describe("POST /api/media", () => {
   });
 
   it("rejects a request with no files", async () => {
-    await request(app).post("/api/media").set(as("user_a")).field("note", "hi").expect(400);
+    await request(app).post("/api/v1/communities/beu/media").set(as("user_a")).field("note", "hi").expect(400);
   });
 
   it("returns 413 for an oversized file", async () => {
@@ -141,7 +143,7 @@ describe("storage capacity", () => {
   });
 });
 
-describe("DELETE /api/media/:id", () => {
+describe("DELETE /api/v1/communities/beu/media/:id", () => {
   let mediaId: string;
   beforeEach(async () => {
     await addAccount("primary");
@@ -149,29 +151,29 @@ describe("DELETE /api/media/:id", () => {
   });
 
   it("lets the owner delete an unattached upload and frees the space", async () => {
-    await request(app).delete(`/api/media/${mediaId}`).set(as("user_a")).expect(204);
+    await request(app).delete(`/api/v1/communities/beu/media/${mediaId}`).set(as("user_a")).expect(204);
 
     expect(await MediaModel.countDocuments()).toBe(0);
     expect((await accountState("primary")).usedBytes).toBe(0);
   });
 
   it("hides other people's uploads behind a 404", async () => {
-    await request(app).delete(`/api/media/${mediaId}`).set(as("user_b")).expect(404);
+    await request(app).delete(`/api/v1/communities/beu/media/${mediaId}`).set(as("user_b")).expect(404);
     expect(await MediaModel.countDocuments()).toBe(1);
   });
 
   it("lets staff delete anyone's upload", async () => {
-    await request(app).delete(`/api/media/${mediaId}`).set(as("user_admin")).expect(204);
+    await request(app).delete(`/api/v1/communities/beu/media/${mediaId}`).set(as("user_admin")).expect(204);
   });
 
   it("requires sign-in and 404s for unknown ids", async () => {
-    await request(app).delete(`/api/media/${mediaId}`).expect(401);
-    await request(app).delete("/api/media/000000000000000000000000").set(as("user_a")).expect(404);
+    await request(app).delete(`/api/v1/communities/beu/media/${mediaId}`).expect(401);
+    await request(app).delete("/api/v1/communities/beu/media/000000000000000000000000").set(as("user_a")).expect(404);
   });
 
   it("refuses to delete media that belongs to a post", async () => {
-    await getMediaService().attach(await userId("user_a"), [mediaId]);
-    const res = await request(app).delete(`/api/media/${mediaId}`).set(as("user_a")).expect(409);
+    await getMediaService().attach(await communityIdOf(), await userId("user_a"), [mediaId]);
+    const res = await request(app).delete(`/api/v1/communities/beu/media/${mediaId}`).set(as("user_a")).expect(409);
     expect(res.body.message).toContain("post");
   });
 });
@@ -189,7 +191,7 @@ describe("MediaService lifecycle (used by the posts module)", () => {
 
   it("attach claims pending uploads", async () => {
     const ids = await uploadTwo();
-    await service().attach(await userId("user_a"), ids);
+    await service().attach(await communityIdOf(), await userId("user_a"), ids);
     expect(await MediaModel.countDocuments({ status: "attached" })).toBe(2);
   });
 
@@ -198,36 +200,41 @@ describe("MediaService lifecycle (used by the posts module)", () => {
     const bob = await userId("user_b");
     const alice = await userId("user_a");
 
-    await expect(service().attach(bob, ids)).rejects.toMatchObject({ statusCode: 400 });
-    await expect(service().attach(alice, [ids[0], "000000000000000000000000"])).rejects.toMatchObject({
+    await expect(service().attach(await communityIdOf(), bob, ids)).rejects.toMatchObject({ statusCode: 400 });
+    await expect(
+      service().attach(await communityIdOf(), alice, [ids[0], "000000000000000000000000"]),
+    ).rejects.toMatchObject({
       statusCode: 400,
     });
     expect(await MediaModel.countDocuments({ status: "attached" })).toBe(0);
 
-    await service().attach(alice, ids);
-    await expect(service().attach(alice, ids)).rejects.toMatchObject({ statusCode: 400 }); // already used
+    await service().attach(await communityIdOf(), alice, ids);
+    await expect(service().attach(await communityIdOf(), alice, ids)).rejects.toMatchObject({ statusCode: 400 }); // already used
   });
 
   it("attach enforces the 8 per post limit and rejects malformed ids", async () => {
     const alice = await userId("user_a");
     await expect(
       service().attach(
+        await communityIdOf(),
         alice,
         Array.from({ length: 9 }, (_, i) => `${i}`.padStart(24, "0")),
       ),
     ).rejects.toMatchObject({
       statusCode: 400,
     });
-    await expect(service().attach(alice, ["not-an-id"])).rejects.toMatchObject({ statusCode: 400 });
+    await expect(service().attach(await communityIdOf(), alice, ["not-an-id"])).rejects.toMatchObject({
+      statusCode: 400,
+    });
   });
 
   it("attach with no ids is a no-op", async () => {
-    await expect(service().attach(await userId("user_a"), [])).resolves.toBeUndefined();
+    await expect(service().attach(await communityIdOf(), await userId("user_a"), [])).resolves.toEqual([]);
   });
 
   it("release removes the files and records (post deleted)", async () => {
     const ids = await uploadTwo();
-    await service().attach(await userId("user_a"), ids);
+    await service().attach(await communityIdOf(), await userId("user_a"), ids);
 
     await service().release(ids);
 
@@ -238,7 +245,7 @@ describe("MediaService lifecycle (used by the posts module)", () => {
   it("cleanupExpired removes only stale pending uploads", async () => {
     const [stale, fresh] = await uploadTwo();
     const [attached] = (await upload("user_a", [{ data: PNG }]).expect(201)).body.data.map((m: { id: string }) => m.id);
-    await service().attach(await userId("user_a"), [attached]);
+    await service().attach(await communityIdOf(), await userId("user_a"), [attached]);
 
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
     // createdAt is immutable in Mongoose, so backdate through the raw driver.

@@ -3,6 +3,7 @@ import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ImageModerator } from "../../src/modules/media/media.types.js";
 import { addClerkUser, as, clerkUsers } from "../helpers/clerk.js";
+import { seedCommunity } from "../helpers/community.js";
 import { clearTestDb, connectTestDb, disconnectTestDb } from "../helpers/db.js";
 import { PNG, WEBP } from "../helpers/images.js";
 import { providerOf } from "../helpers/storage.js";
@@ -17,7 +18,9 @@ const { createMediaRoutes } = await import("../../src/modules/media/media.routes
 const { MediaService } = await import("../../src/modules/media/media.service.js");
 const { StorageAccountModel } = await import("../../src/modules/storage/storage-account.model.js");
 const { getStorageAdminService, getStorageService } = await import("../../src/modules/storage/storage.module.js");
-const { UserModel } = await import("../../src/modules/users/user.model.js");
+const { createResolveCommunity } = await import("../../src/modules/communities/community.middleware.js");
+const { attachMember } = await import("../../src/modules/auth/auth.middleware.js");
+const { MemberModel } = await import("../../src/modules/members/member.model.js");
 
 type Verdict = { allowed: boolean; unavailable: boolean };
 const ALLOW: Verdict = { allowed: true, unavailable: false };
@@ -29,16 +32,19 @@ const check = vi.fn<ImageModerator["check"]>();
 const moderator: ImageModerator = { check };
 
 const router = Router();
-router.use(
+const community = Router({ mergeParams: true });
+community.use(createResolveCommunity(), attachMember);
+community.use(
   "/media",
   createMediaRoutes(new MediaService(new MediaRepository(), getStorageService(), new ImageValidator(), moderator)),
 );
+router.use("/v1/communities/:community", community);
 const app = createApp(router);
 
 const accountUsed = async () => (await StorageAccountModel.findOne({ name: "primary" }))!.usedBytes;
 
 const uploadMultipart = (...files: Buffer[]) => {
-  let req = request(app).post("/api/media").set(as("user_a"));
+  let req = request(app).post("/api/v1/communities/beu/media").set(as("user_a"));
   for (const f of files) req = req.attach("files", f, { filename: "photo.png" });
   return req;
 };
@@ -46,7 +52,7 @@ const uploadMultipart = (...files: Buffer[]) => {
 type Ticket = { id: string; upload: { fields: Record<string, string> } };
 const startDirect = async (data: Buffer) => {
   const res = await request(app)
-    .post("/api/media/uploads")
+    .post("/api/v1/communities/beu/media/uploads")
     .set(as("user_a"))
     .send({ files: [{ mimeType: "image/png", size: data.length }] })
     .expect(201);
@@ -54,15 +60,16 @@ const startDirect = async (data: Buffer) => {
   (await providerOf("primary")).simulateClientUpload(ticket.upload.fields.key, data, "image/png");
   return ticket;
 };
-const complete = (id: string) => request(app).post(`/api/media/${id}/complete`).set(as("user_a"));
+const complete = (id: string) => request(app).post(`/api/v1/communities/beu/media/${id}/complete`).set(as("user_a"));
 
 beforeAll(async () => {
   await connectTestDb();
-  await Promise.all([UserModel.init(), StorageAccountModel.init(), MediaModel.init()]);
+  await Promise.all([MemberModel.init(), StorageAccountModel.init(), MediaModel.init()]);
 });
 afterAll(disconnectTestDb);
 beforeEach(async () => {
   await clearTestDb();
+  await seedCommunity();
   clerkUsers.clear();
   check.mockReset();
   check.mockResolvedValue(ALLOW);

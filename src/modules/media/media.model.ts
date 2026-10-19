@@ -5,6 +5,8 @@ export type MediaStatus = (typeof MEDIA_STATUSES)[number];
 
 /** A stored file. Posts reference this record, never a raw URL, so files can move between storage accounts. */
 export interface IMedia {
+  communityId: Types.ObjectId;
+  /** The uploading member. Membership ids are per community, so ownership already implies the community. */
   owner: Types.ObjectId;
   accountId: Types.ObjectId;
   provider: string;
@@ -22,7 +24,8 @@ export interface IMedia {
 
 const mediaSchema = new Schema<IMedia>(
   {
-    owner: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    communityId: { type: Schema.Types.ObjectId, ref: "Community", required: true },
+    owner: { type: Schema.Types.ObjectId, ref: "Member", required: true, index: true },
     accountId: { type: Schema.Types.ObjectId, ref: "StorageAccount", required: true },
     provider: { type: String, required: true },
     key: { type: String, required: true },

@@ -31,6 +31,27 @@ const schema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   MODERATION_MODEL: z.string().default("omni-moderation-latest"),
   MODERATION_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(8000),
+  // Which hosts this process serves: both (selected by hostname), only the JSON API, or only short-link redirects (NFR-PRT-2).
+  SERVE_MODE: z.enum(["all", "api", "links"]).default("all"),
+  // Hostname that serves short links. A setting, never stored in content, so it can change without a migration.
+  LINK_HOST: z.string().default("go.pyqdeck.in"),
+  LINK_CODE_LENGTH: z.coerce.number().int().min(8).max(16).default(8),
+  // A link is re-checked at click time when its last check is older than this.
+  LINK_RECHECK_HOURS: z.coerce.number().min(0).default(24),
+  // Number of reverse proxies in front (Render = 1) so req.ip and req.hostname are the real client values.
+  TRUST_PROXY: z.coerce.number().int().min(0).default(0),
+  // Communities created on boot when missing, comma separated slugs.
+  SEED_COMMUNITIES: z
+    .string()
+    .default("beu")
+    .transform((v) =>
+      v
+        .split(",")
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  // Multiplies every rate limit. Raise it for load tests; leave it at 1 in production.
+  RATE_LIMIT_SCALE: z.coerce.number().min(0.1).default(1),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });
 

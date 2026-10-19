@@ -13,6 +13,9 @@ export interface ModerationInput {
 
 /** Who and what is being moderated. Used for the audit trail only; never sent to the provider. */
 export interface ModerationContext {
+  /** The community the content belongs to; every event is recorded against one (FR-COM-14). */
+  communityId?: string;
+  /** The member (not the account) who submitted it. */
   userId?: string;
   /** The kind of content, e.g. "media", "post", "comment". */
   source: string;
@@ -71,6 +74,7 @@ export interface ModerationDecision {
 }
 
 export interface ModerationEventInput {
+  communityId?: string;
   userId?: string;
   source: string;
   sourceId?: string;

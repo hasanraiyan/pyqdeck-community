@@ -1,3 +1,4 @@
+import type { ContentModerator } from "../../core/ports/content-moderator.js";
 import { env } from "../../config/env.js";
 import { ModerationEventRepository } from "./moderation-event.repository.js";
 import { ModerationPolicy } from "./moderation.policy.js";
@@ -19,3 +20,19 @@ function createProvider(): ModerationProvider {
 let service: ModerationService | undefined;
 export const getModerationService = () =>
   (service ??= new ModerationService(createProvider(), new ModerationPolicy(), new ModerationEventRepository()));
+
+/** Adapts the moderation service to the small text port that posts, comments and profiles depend on. */
+export const getContentModerator = (): ContentModerator => ({
+  async moderateText(text, context) {
+    const decision = await getModerationService().moderate(
+      { text },
+      {
+        source: context.source,
+        sourceId: context.sourceId,
+        communityId: context.communityId,
+        userId: context.memberId,
+      },
+    );
+    return { action: decision.action, degraded: decision.degraded, categories: decision.categories };
+  },
+});

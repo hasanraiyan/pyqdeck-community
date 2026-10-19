@@ -1,6 +1,7 @@
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { addClerkUser, as, clerkUsers } from "../helpers/clerk.js";
+import { BASE, communityIdOf, seedCommunity, setMemberRole } from "../helpers/community.js";
 import { clearTestDb, connectTestDb, disconnectTestDb } from "../helpers/db.js";
 
 vi.mock("@clerk/express", async () => (await import("../helpers/clerk.js")).clerkModule);
@@ -10,12 +11,14 @@ const { ModerationEventModel } = await import("../../src/modules/moderation/mode
 const { ModerationEventRepository } = await import("../../src/modules/moderation/moderation-event.repository.js");
 const { ModerationPolicy } = await import("../../src/modules/moderation/moderation.policy.js");
 const { ModerationService } = await import("../../src/modules/moderation/moderation.service.js");
-const { UserModel } = await import("../../src/modules/users/user.model.js");
+const { MemberModel } = await import("../../src/modules/members/member.model.js");
 
 const app = createApp();
 const repository = new ModerationEventRepository();
 
+let cid = "";
 const event = (over: Record<string, unknown> = {}) => ({
+  communityId: cid,
   source: "media",
   action: "reject" as const,
   degraded: false,
@@ -28,33 +31,35 @@ const event = (over: Record<string, unknown> = {}) => ({
 
 beforeAll(async () => {
   await connectTestDb();
-  await Promise.all([UserModel.init(), ModerationEventModel.init()]);
+  await Promise.all([MemberModel.init(), ModerationEventModel.init()]);
 });
 afterAll(disconnectTestDb);
 beforeEach(async () => {
   await clearTestDb();
+  await seedCommunity();
+  cid = await communityIdOf();
   clerkUsers.clear();
   addClerkUser("user_member", { email: "member@example.com" });
   addClerkUser("user_mod", { email: "mod@example.com" });
   addClerkUser("user_admin", { email: "boss@example.com" }); // allow-listed in vitest.config, so admin
-  await request(app).get("/api/users/me").set(as("user_member"));
-  await request(app).get("/api/users/me").set(as("user_mod"));
-  await UserModel.updateOne({ clerkId: "user_mod" }, { role: "moderator" });
+  await request(app).get(`${BASE()}/members/me`).set(as("user_member"));
+  await request(app).get(`${BASE()}/members/me`).set(as("user_mod"));
+  await setMemberRole("user_mod", "moderator");
 });
 
-describe("GET /api/moderation/events (access)", () => {
+describe("GET /moderation/events (access)", () => {
   it("is closed to anonymous callers and plain members", async () => {
-    await request(app).get("/api/moderation/events").expect(401);
-    await request(app).get("/api/moderation/events").set(as("user_member")).expect(403);
+    await request(app).get(`${BASE()}/moderation/events`).expect(401);
+    await request(app).get(`${BASE()}/moderation/events`).set(as("user_member")).expect(403);
   });
 
   it("is open to moderators and admins", async () => {
-    await request(app).get("/api/moderation/events").set(as("user_mod")).expect(200);
-    await request(app).get("/api/moderation/events").set(as("user_admin")).expect(200);
+    await request(app).get(`${BASE()}/moderation/events`).set(as("user_mod")).expect(200);
+    await request(app).get(`${BASE()}/moderation/events`).set(as("user_admin")).expect(200);
   });
 });
 
-describe("GET /api/moderation/events (listing)", () => {
+describe("GET /moderation/events (listing)", () => {
   beforeEach(async () => {
     await repository.record(event({ source: "media", action: "reject" }));
     await repository.record(event({ source: "post", action: "review", categories: ["harassment"] }));
@@ -63,7 +68,7 @@ describe("GET /api/moderation/events (listing)", () => {
     );
   });
 
-  const list = (qs = "") => request(app).get(`/api/moderation/events${qs}`).set(as("user_mod"));
+  const list = (qs = "") => request(app).get(`${BASE()}/moderation/events${qs}`).set(as("user_mod"));
 
   it("returns events newest first with pagination", async () => {
     const res = await list().expect(200);
@@ -114,16 +119,17 @@ describe("recording", () => {
       })),
     };
     const service = new ModerationService(provider, new ModerationPolicy(), repository);
-    const user = await UserModel.findOne({ clerkId: "user_member" });
+    const user = await MemberModel.findOne({}).sort({ createdAt: 1 });
 
     const decision = await service.moderate(
       { text: "SOME-OFFENSIVE-TEXT-THAT-MUST-NOT-BE-STORED" },
-      { userId: user!.id, source: "comment", sourceId: "c1" },
+      { userId: user!.id, communityId: cid, source: "comment", sourceId: "c1" },
     );
 
     expect(decision.action).toBe("reject");
     const stored = await ModerationEventModel.findOne().lean();
     expect(stored).toMatchObject({ source: "comment", sourceId: "c1", action: "reject", categories: ["hate"] });
+    expect(String(stored!.communityId)).toBe(cid);
     expect(String(stored!.userId)).toBe(user!.id);
     expect(JSON.stringify(stored)).not.toContain("SOME-OFFENSIVE-TEXT");
   });

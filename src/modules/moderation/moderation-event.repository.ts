@@ -14,6 +14,10 @@ export class ModerationEventRepository extends BaseRepository<IModerationEvent> 
     await this.create({
       ...event,
       action: event.action,
+      communityId:
+        event.communityId && Types.ObjectId.isValid(event.communityId)
+          ? new Types.ObjectId(event.communityId)
+          : undefined,
       userId: event.userId && Types.ObjectId.isValid(event.userId) ? new Types.ObjectId(event.userId) : undefined,
     });
   }

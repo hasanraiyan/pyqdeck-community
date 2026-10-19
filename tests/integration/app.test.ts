@@ -47,6 +47,7 @@ describe("request ids", () => {
     expect(res.body).toEqual({
       success: false,
       message: "Route GET /api/nope not found",
+      code: "not_found",
       requestId: "trace-err-12345",
     });
   });

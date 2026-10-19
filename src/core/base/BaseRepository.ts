@@ -40,7 +40,7 @@ export abstract class BaseRepository<T> {
   }
 
   updateById(id: string, update: UpdateQuery<T>) {
-    return this.model.findByIdAndUpdate(id, update, { new: true, runValidators: true }).exec();
+    return this.model.findByIdAndUpdate(id, update, { returnDocument: "after", runValidators: true }).exec();
   }
 
   deleteById(id: string) {
