@@ -243,6 +243,12 @@ export class LinkService implements LinkRewriter {
     return Boolean(link && link.communityId.equals(communityId));
   }
 
+  /** The destination host of a link of this community, for the moderator's report list. */
+  async hostOf(communityId: Types.ObjectId, code: string): Promise<string | null> {
+    const link = await this.links.findByCode(code);
+    return link && link.communityId.equals(communityId) ? link.host : null;
+  }
+
   // ---- moderation ----
 
   async blockLink(communityId: Types.ObjectId, code: string) {

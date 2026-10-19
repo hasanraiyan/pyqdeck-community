@@ -37,6 +37,7 @@ export class CommentPresenter {
 
     return comments.map((c) => {
       const own = viewer ? c.authorId.equals(viewer._id) : false;
+      const staff = viewer ? viewer.role !== "member" : false;
       const content = rendered.get(`comment:${c.id}`)!;
       const replyTo = c.replyToId ? toAuthor(byId.get(c.replyToId.toString())) : null;
       return {
@@ -59,7 +60,12 @@ export class CommentPresenter {
         isOwn: own,
         editedAt: c.editedAt ?? null,
         createdAt: c.createdAt,
-        ...(own && { hasPendingEdit: Boolean(c.pendingRevision) }),
+        // Moderation details are for the author and the community's moderators.
+        ...((own || staff) && {
+          heldReason: c.heldReason ?? null,
+          removedReason: c.removedReason ?? null,
+          hasPendingEdit: Boolean(c.pendingRevision),
+        }),
       };
     });
   }

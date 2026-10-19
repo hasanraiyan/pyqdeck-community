@@ -25,7 +25,17 @@ interface Call extends RequestOptions {
 
 export interface Envelope<T> {
   data: T;
-  pagination?: { nextCursor?: string | null; hasMore?: boolean };
+  /** Cursor lists send `nextCursor` and `hasMore`; the few offset lists (moderation history) send page numbers. */
+  pagination?: {
+    nextCursor?: string | null;
+    hasMore?: boolean;
+    total?: number;
+    page?: number;
+    limit?: number;
+    totalPages?: number;
+    hasNext?: boolean;
+    hasPrev?: boolean;
+  };
 }
 
 const DEFAULT_TIMEOUT_MS = 15_000;

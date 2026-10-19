@@ -337,6 +337,20 @@ export class CommentService {
     return this.findVisible(community, viewer, id);
   }
 
+  /** For the moderator's report list: what a reported comment is, in a line, whatever state it is in. */
+  async describe(community: CommunityDoc, id: string) {
+    if (!Types.ObjectId.isValid(id)) return null;
+    const comment = await this.repository.findByIdIn(community._id, id);
+    if (!comment) return null;
+    const [author] = await this.members.getByIds(community._id, [comment.authorId]);
+    return {
+      postId: comment.postId.toString(),
+      authorUsername: author?.username ?? null,
+      snippet: comment.body.slice(0, 160),
+      status: comment.status,
+    };
+  }
+
   queue(community: CommunityDoc, cursor: string | undefined, limit: number) {
     return this.repository.queue(community._id, cursor, limit);
   }

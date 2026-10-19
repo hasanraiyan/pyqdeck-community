@@ -32,6 +32,7 @@ export class PostPresenter {
 
     return posts.map((post) => {
       const own = viewer ? post.authorId.equals(viewer._id) : false;
+      const staff = viewer ? viewer.role !== "member" : false;
       const content = rendered.get(`post:${post.id}`)!;
       return {
         id: post.id as string,
@@ -56,8 +57,9 @@ export class PostPresenter {
         isOwnPost: own,
         editedAt: post.editedAt ?? null,
         createdAt: post.createdAt,
-        // Moderation details are for the author only (FR-POST-19); nobody else learns a post was ever held.
-        ...(own && {
+        // Moderation details are for the author and the community's moderators (FR-POST-19); nobody else learns a
+        // post was ever held.
+        ...((own || staff) && {
           heldReason: post.heldReason ?? null,
           removedReason: post.removedReason ?? null,
           hasPendingEdit: Boolean(post.pendingRevision),

@@ -85,6 +85,9 @@ export interface Comment {
   editedAt: string | null;
   createdAt: string;
   rawBody?: string;
+  /** Own comments and, for moderators, anyone's. */
+  heldReason?: "moderation" | "reports" | null;
+  removedReason?: string | null;
   hasPendingEdit?: boolean;
 }
 
@@ -190,6 +193,15 @@ export interface ReportGroup {
   reasons: ReportReason[];
   notes: string[];
   firstReportedAt: string;
+  /** What the reported thing is, so a moderator does not have to open it. Null if it no longer exists. */
+  preview: {
+    title: string;
+    snippet?: string;
+    authorUsername?: string | null;
+    /** The post to open (the post itself, or the post a comment belongs to). */
+    postId?: string;
+    status?: string;
+  } | null;
 }
 
 export interface LinkInfo {
@@ -199,6 +211,46 @@ export interface LinkInfo {
   status: "active" | "inactive" | "blocked";
   /** What a tap would do: open at once, show the warning page, or refuse. */
   decision: "redirect" | "warn" | "blocked" | "gone" | "notfound";
+}
+
+/** One result of the content check. The content itself is never stored, only who, where, the result and the scores. */
+export interface ModerationEvent {
+  _id: string;
+  /** The member who submitted it. */
+  userId?: string;
+  /** Where it was submitted: media, post, comment or profile. */
+  source: string;
+  /** The checked thing: a media id for images. */
+  sourceId?: string;
+  action: "allow" | "review" | "reject";
+  /** The checker was unavailable, so there is no real verdict. */
+  degraded: boolean;
+  /** Sexual content involving minors: needs the child-safety process. */
+  escalate: boolean;
+  categories: string[];
+  scores: Record<string, number>;
+  /** Which checker decided, e.g. openai or profanity-filter. */
+  provider: string;
+  createdAt: string;
+}
+
+export interface PageMeta {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+}
+
+export interface ModerationEventFilter {
+  page?: number;
+  limit?: number;
+  action?: "allow" | "review" | "reject";
+  source?: string;
+  sourceId?: string;
+  userId?: string;
+  escalate?: boolean;
 }
 
 /** A cursor page. Pass `nextCursor` back to get the next one. */

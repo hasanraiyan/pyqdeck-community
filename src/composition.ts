@@ -32,6 +32,7 @@ import {
   ReportRepository,
   ReportService,
   type ReportActions,
+  type ReportDescriber,
   type ReportTargetResolver,
 } from "./modules/reports/report.service.js";
 import type { ReportTarget } from "./modules/reports/report.model.js";
@@ -124,7 +125,23 @@ function build() {
       if (type === "link") await links.blockLink(community._id, id);
     },
   };
-  const reports = new ReportService(new ReportRepository(), resolvers, actions);
+  const describe: ReportDescriber = async (community, type, id) => {
+    if (type === "post") {
+      const p = await posts.describe(community, id);
+      return p && { title: `Post by @${p.authorUsername ?? "deleted"}`, ...p };
+    }
+    if (type === "comment") {
+      const c = await comments.describe(community, id);
+      return c && { title: `Comment by @${c.authorUsername ?? "deleted"}`, ...c };
+    }
+    if (type === "member") {
+      const [m] = await members.getByIds(community._id, [id]);
+      return m && { title: `${m.displayName} (@${m.username})`, authorUsername: m.username, status: m.status };
+    }
+    const host = await links.hostOf(community._id, id);
+    return host ? { title: `Link to ${host}` } : null;
+  };
+  const reports = new ReportService(new ReportRepository(), resolvers, actions, describe);
 
   return {
     members,

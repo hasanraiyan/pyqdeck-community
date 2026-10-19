@@ -391,6 +391,7 @@ describe("reports and moderation", () => {
     const queue = (await mod().get("/reports").expect(200)).body.data;
     expect(queue).toHaveLength(1);
     expect(queue[0]).toMatchObject({ targetType: "post", targetId: post.id, count: 3, reasons: ["spam"] });
+    expect(queue[0].preview).toMatchObject({ authorUsername: "alice", postId: post.id, status: "pending" });
     expect(JSON.stringify(queue)).not.toMatch(/reporter/i); // reporters stay anonymous
 
     await mod().post("/reports/resolve", { targetType: "post", targetId: post.id, outcome: "dismissed" }).expect(200);
@@ -425,6 +426,12 @@ describe("reports and moderation", () => {
     const held = await publish(alice(), "HOLDME post");
     const hc = await comment(bob(), (await publish()).id, "HOLDME comment");
     expect((await mod().get("/posts/queue").expect(200)).body.data).toHaveLength(1);
+    // staff see why it is held; the author of someone else's held post is not involved here
+    expect((await mod().get("/posts/queue")).body.data[0]).toMatchObject({
+      heldReason: "moderation",
+      status: "pending",
+    });
+    expect((await mod().get("/comments/queue")).body.data[0]).toMatchObject({ heldReason: "moderation" });
     expect((await mod().get("/comments/queue").expect(200)).body.data).toHaveLength(1);
     await bob().get("/posts/queue").expect(403);
 

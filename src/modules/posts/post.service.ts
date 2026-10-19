@@ -366,6 +366,19 @@ export class PostService {
     if (moved) await this.enterPublished(moved);
   }
 
+  /** For the moderator's report list: what a reported post is, in a line, whatever state it is in. */
+  async describe(community: CommunityDoc, idOrSlug: string) {
+    const post = await this.repository.findByIdOrSlug(community._id, idOrSlug);
+    if (!post) return null;
+    const [author] = await this.members.getByIds(community._id, [post.authorId]);
+    return {
+      postId: post.id as string,
+      authorUsername: author?.username ?? null,
+      snippet: post.body.slice(0, 160),
+      status: post.status,
+    };
+  }
+
   queue(community: CommunityDoc, cursor: string | undefined, limit: number) {
     return this.repository.pendingQueue(community._id, cursor, limit);
   }

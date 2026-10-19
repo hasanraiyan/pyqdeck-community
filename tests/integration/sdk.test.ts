@@ -245,6 +245,23 @@ describe("community SDK against the real server", () => {
     expect(typeof post.createdAt).toBe("string");
   });
 
+  it("lets a moderator read the moderation history, and refuses everyone else", async () => {
+    const { setMemberRole } = await import("../helpers/community.js");
+    addClerkUser("user_mod", { email: "mod@example.com", username: "modmod" });
+    const alice = sdk("user_a");
+    const mod = sdk("user_mod");
+    await mod.members.me();
+    await setMemberRole("user_mod", "moderator");
+    await alice.publishPost({ body: "a clean post", images: [image] });
+
+    const history = await mod.moderation.events({ source: "media", action: "allow", limit: 5 });
+    expect(history.items).toHaveLength(1);
+    expect(history.items[0]).toMatchObject({ source: "media", action: "allow", degraded: false });
+    expect(history.page).toMatchObject({ total: 1, page: 1, hasNext: false });
+
+    await expect(alice.moderation.events()).rejects.toMatchObject({ status: 403 });
+  });
+
   it("builds cache keys that always carry the community", () => {
     expect(communityKeys.feed("beu", { hashtag: "dsa" })).toEqual(["community", "beu", "feed", { hashtag: "dsa" }]);
     expect(communityKeys.post("gate", "x")[1]).toBe("gate");

@@ -8,6 +8,9 @@ import type {
   LocalImage,
   Member,
   MediaItem,
+  ModerationEvent,
+  ModerationEventFilter,
+  PageMeta,
   Notification,
   NotificationType,
   OwnMember,
@@ -238,6 +241,19 @@ export function createCommunityClient(options: CommunityClientOptions) {
     ) => (await send<{ closed: number }>("POST", "/reports/resolve", input, o)).data,
   };
 
+  // Moderators and admins only. The history of every content check, allowed results included.
+  const moderation = {
+    events: async (filter: ModerationEventFilter = {}, o?: RequestOptions) => {
+      const res = await http.call<ModerationEvent[]>({
+        method: "GET",
+        path: `${root}/moderation/events`,
+        query: { ...filter, escalate: filter.escalate === undefined ? undefined : String(filter.escalate) },
+        ...o,
+      });
+      return { items: res.data, page: res.pagination as PageMeta };
+    },
+  };
+
   const links = {
     /** Destination host and safety verdict, so the app can show its own warning before opening a link. */
     resolve: async (code: string, o?: RequestOptions) =>
@@ -341,6 +357,7 @@ export function createCommunityClient(options: CommunityClientOptions) {
     members,
     notifications,
     reports,
+    moderation,
     links,
     media,
     publishPost,

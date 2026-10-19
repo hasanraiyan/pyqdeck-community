@@ -83,6 +83,24 @@ export interface ReportActions {
   ): Promise<void>;
 }
 
+/** A short description of a reported thing, so a moderator sees what it is without opening it. */
+export interface ReportPreview {
+  /** Who or what: "Post by @alice", "alice (member)", "link to example.com". */
+  title: string;
+  snippet?: string;
+  authorUsername?: string | null;
+  /** The post to open (for a post, or the post a comment belongs to). */
+  postId?: string;
+  /** Current state of the reported content, e.g. published, pending, deleted. */
+  status?: string;
+}
+
+export type ReportDescriber = (
+  community: CommunityDoc,
+  type: ReportTarget,
+  targetId: string,
+) => Promise<ReportPreview | null>;
+
 /** Distinct reporters that hide a post or comment until a moderator looks (TBD-13). */
 export const AUTO_HIDE_THRESHOLD = 3;
 
@@ -91,6 +109,7 @@ export class ReportService {
     private readonly repository: ReportRepository,
     private readonly resolvers: Record<ReportTarget, ReportTargetResolver>,
     private readonly actions: ReportActions,
+    private readonly describe?: ReportDescriber,
   ) {}
 
   async create(
@@ -128,15 +147,19 @@ export class ReportService {
   /** Open reports grouped by target, worst first. Reporter identities are never included (FR-RPT-5). */
   async queue(community: CommunityDoc, page: number, limit: number) {
     const rows = await this.repository.grouped(community._id, (page - 1) * limit, limit);
-    return {
-      items: rows.slice(0, limit).map((r) => ({
+    const items = await Promise.all(
+      rows.slice(0, limit).map(async (r) => ({
         targetType: r._id.targetType,
         targetId: r._id.targetId,
         count: r.count,
         reasons: r.reasons,
         notes: r.notes.filter(Boolean).slice(0, 5),
         firstReportedAt: r.firstAt,
+        preview: (await this.describe?.(community, r._id.targetType, r._id.targetId).catch(() => null)) ?? null,
       })),
+    );
+    return {
+      items,
       hasMore: rows.length > limit,
     };
   }
