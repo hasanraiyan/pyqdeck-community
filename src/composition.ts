@@ -2,6 +2,9 @@ import { Router } from "express";
 import { Types } from "mongoose";
 import { AppError } from "./core/errors/AppError.js";
 import { getAccountService } from "./modules/accounts/account.module.js";
+import { getCommunityService } from "./modules/communities/community.module.js";
+import { ProfileTool } from "./modules/mcp/mcp.profile.js";
+import { createMcpRoutes } from "./modules/mcp/mcp.routes.js";
 import { CommentPresenter } from "./modules/comments/comment.presenter.js";
 import { CommentRepository } from "./modules/comments/comment.repository.js";
 import { createCommentRoutes } from "./modules/comments/comment.routes.js";
@@ -160,6 +163,19 @@ function build() {
 
 let services: ReturnType<typeof build> | undefined;
 export const getServices = () => (services ??= build());
+
+/** The remote MCP endpoint (`/mcp` and its OAuth discovery documents). It works through the same services as the API. */
+export function createMcpRouter() {
+  const s = getServices();
+  return createMcpRoutes(
+    new ProfileTool({
+      accounts: getAccountService(),
+      communities: getCommunityService(),
+      members: s.members,
+      social: s.social,
+    }),
+  );
+}
 
 /** Everything under `/api/v1/communities/:community`. Resolves the community and the caller's membership first. */
 export function createCommunityRouter() {

@@ -10,6 +10,7 @@ import { createLinkHostRoutes } from "./modules/links/link.routes.js";
 import clerkWebhookRoutes from "./modules/auth/clerk-webhook.routes.js";
 import { clerkAuth } from "./modules/auth/clerk.middleware.js";
 import { requestLogger } from "./core/middleware/requestLogger.js";
+import { createMcpRouter } from "./composition.js";
 import defaultRoutes from "./routes/index.js";
 
 /** `apiRoutes` is injectable so tests can mount extra routers on the real middleware stack. */
@@ -44,6 +45,8 @@ export function createApp(apiRoutes: Router = defaultRoutes) {
   app.use(clerkAuth);
   app.use(attachAccount);
 
+  // At the root, not under /api: the OAuth discovery paths are fixed by the MCP and OAuth specs.
+  app.use(createMcpRouter());
   app.use("/api", apiRoutes);
 
   app.use(notFound);
