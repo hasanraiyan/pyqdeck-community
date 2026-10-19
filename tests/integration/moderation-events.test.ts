@@ -92,15 +92,21 @@ describe("GET /moderation/events (listing)", () => {
     expect(res.body.pagination).toMatchObject({ total: 3, totalPages: 2, hasPrev: true, hasNext: false });
   });
 
-  it.each(["?action=allow", "?limit=101", "?escalate=maybe", "?userId=not-an-id"])("rejects %s", async (qs) => {
+  it.each(["?action=maybe", "?limit=101", "?escalate=maybe", "?userId=not-an-id"])("rejects %s", async (qs) => {
     await list(qs).expect(400);
   });
 });
 
 describe("recording", () => {
-  it("never stores an allow", async () => {
-    await repository.record({ ...event(), action: "allow" });
-    expect(await ModerationEventModel.countDocuments()).toBe(0);
+  it("stores allowed results too, so every check can be looked up later", async () => {
+    await repository.record({
+      ...event(),
+      action: "allow",
+      categories: [],
+      scores: { sexual: 0.01 },
+      sourceId: "media-1",
+    });
+    expect(await ModerationEventModel.findOne()).toMatchObject({ action: "allow", sourceId: "media-1" });
   });
 
   it("expires old events on its own (90 day retention)", async () => {

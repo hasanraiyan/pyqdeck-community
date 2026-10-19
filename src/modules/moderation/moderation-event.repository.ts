@@ -9,11 +9,8 @@ export class ModerationEventRepository extends BaseRepository<IModerationEvent> 
   }
 
   async record(event: ModerationEventInput): Promise<void> {
-    // "allow" is never recorded, so the type narrows to review | reject.
-    if (event.action === "allow") return;
     await this.create({
       ...event,
-      action: event.action,
       communityId:
         event.communityId && Types.ObjectId.isValid(event.communityId)
           ? new Types.ObjectId(event.communityId)

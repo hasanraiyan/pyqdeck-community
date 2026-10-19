@@ -84,11 +84,10 @@ export class ModerationService {
     );
     const decision: ModerationDecision = { ...decided, degraded: false };
 
-    if (decision.action !== "allow") {
-      if (decision.escalate)
-        logger.error({ ...context }, "content flagged for child safety: escalate per your reporting process");
-      await this.record(context, decision, verdict.scores);
-    }
+    if (decision.escalate)
+      logger.error({ ...context }, "content flagged for child safety: escalate per your reporting process");
+    // Every result is kept (allowed ones too) so "what did the check say about this image?" can always be answered.
+    await this.record(context, decision, verdict.scores);
     return decision;
   }
 
@@ -104,8 +103,8 @@ export class ModerationService {
     const decision: ModerationDecision = unreadable
       ? { action: "reject", categories: [], reasons: ["unprocessable_input"], degraded: false, escalate: false }
       : { action: "review", categories: [], reasons: ["moderation_unavailable"], degraded: true, escalate: false };
-    // Outages are not the user's doing, so only unreadable content is put on their record.
-    if (unreadable) await this.record(context, decision, {});
+    // An outage is kept too, marked `degraded`, so a missing verdict is visible instead of silently absent.
+    await this.record(context, decision, {});
     return decision;
   }
 

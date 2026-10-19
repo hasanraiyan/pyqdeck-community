@@ -35,11 +35,11 @@ beforeEach(() => {
 });
 
 describe("ModerationService.moderate", () => {
-  it("allows clean content without writing an audit event", async () => {
+  it("allows clean content and still records the result", async () => {
     const decision = await service.moderate({ text: "how do I prepare for DBMS?" }, context);
 
     expect(decision).toMatchObject({ action: "allow", degraded: false, escalate: false, categories: [] });
-    expect(audit.record).not.toHaveBeenCalled();
+    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: "allow", source: context.source }));
   });
 
   it("does not call the provider when there is nothing to check", async () => {
@@ -114,10 +114,10 @@ describe("failing closed", () => {
     expect(decision).toMatchObject({ action: "review", degraded: true, reasons: ["moderation_unavailable"] });
   });
 
-  it("does not put an outage on the user's record", async () => {
+  it("records an outage as degraded, so a missing verdict is visible", async () => {
     provider.moderate.mockRejectedValue(new ModerationUnavailableError());
     await service.moderate({ text: "anything" }, context);
-    expect(audit.record).not.toHaveBeenCalled();
+    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: "review", degraded: true }));
   });
 
   it("rejects content the provider cannot read, and records it", async () => {

@@ -9,7 +9,7 @@ export interface IModerationEvent {
   userId?: Types.ObjectId;
   source: string;
   sourceId?: string;
-  action: "review" | "reject";
+  action: "allow" | "review" | "reject";
   degraded: boolean;
   escalate: boolean;
   categories: string[];
@@ -25,7 +25,7 @@ const moderationEventSchema = new Schema<IModerationEvent>({
   userId: { type: Schema.Types.ObjectId, ref: "Member", index: true },
   source: { type: String, required: true, index: true },
   sourceId: { type: String },
-  action: { type: String, enum: ["review", "reject"], required: true, index: true },
+  action: { type: String, enum: ["allow", "review", "reject"], required: true, index: true },
   degraded: { type: Boolean, default: false },
   escalate: { type: Boolean, default: false, index: true },
   categories: { type: [String], default: [] },

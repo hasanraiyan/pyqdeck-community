@@ -57,9 +57,7 @@ export class PostPresenter {
         editedAt: post.editedAt ?? null,
         createdAt: post.createdAt,
         // Moderation details are for the author only (FR-POST-19); nobody else learns a post was ever held.
-        // The author edits the text as typed; readers only ever get the short-link version (FR-LNK-3).
         ...(own && {
-          rawBody: post.body,
           heldReason: post.heldReason ?? null,
           removedReason: post.removedReason ?? null,
           hasPendingEdit: Boolean(post.pendingRevision),

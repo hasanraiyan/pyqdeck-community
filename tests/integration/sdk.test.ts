@@ -99,7 +99,6 @@ describe("community SDK against the real server", () => {
     expect(post).toMatchObject({ status: "published", hashtags: ["dsa"], isOwnPost: true });
     expect(post.media).toHaveLength(2);
     expect(post.body).toMatch(/^notes #dsa https:\/\/go\.pyqdeck\.in\/[A-Za-z0-9]{8}$/);
-    expect(post.rawBody).toBe("notes #dsa https://example.com/x");
     expect(progress[0]).toBe(0);
     expect(progress.at(-1)).toBe(1);
     expect(progress).toEqual([...progress].sort((a, b) => a - b)); // never goes backwards

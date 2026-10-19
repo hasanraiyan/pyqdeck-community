@@ -287,8 +287,12 @@ storage.
 `src/modules/moderation/moderation.policy.ts`. Edit it to match your community guidelines. `nearMissScore` (default
 `0.5`) holds content the provider did not flag but scored highly.
 
-**What moderators can see.** `GET /api/moderation/events` (moderators and admins) lists blocked and held items: who,
-which category, scores, and `escalate`. The content itself is **never stored**, and events are deleted after 90 days.
+**History: what did the check say?** Every check leaves a record, **allowed results included**: the person, where
+(`media`, `post`, `comment`, `profile`), the result (`allow` / `review` / `reject`), the categories and scores, whether
+the checker was down (`degraded`) and the id of the thing checked (`sourceId`, a media id for images). Moderators and admins
+read it at `GET /api/v1/communities/{community}/moderation/events`, e.g. `?sourceId=<media id>` for one image,
+`?action=allow&source=media` for every allowed image, or `?userId=<member id>`. The content itself is **never stored**, and
+events are deleted after 90 days. The same scores are written to the server log as `moderation verdict`.
 
 **Child safety (`escalate: true`).** Blocking such content is not enough. Decide now who reviews `escalate` events,
 how you preserve what law requires, and how you report it (in India, via the national cybercrime reporting portal and

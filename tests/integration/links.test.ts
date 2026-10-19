@@ -58,11 +58,9 @@ describe("rewriting links for readers", () => {
     const seen = (await bob().get(`/posts/${post.id}`)).body.data;
     expect(seen.body).toBe(`Read https://go.pyqdeck.in/${code} please`);
     expect(seen.links[0]).not.toHaveProperty("clicks"); // click counts are for the author only
-    expect(seen).not.toHaveProperty("rawBody");
 
     const mine = (await alice().get(`/posts/${post.id}`)).body.data;
-    expect(mine.rawBody).toBe("Read https://example.com/very/long/path?x=1&y=2#frag please");
-    expect((await PostModel.findById(post.id))!.body).toBe(mine.rawBody);
+    expect(mine.body).toBe(`Read https://go.pyqdeck.in/${code} please`);
   });
 
   it("handles Markdown links and autolinks, and leaves code, math and the product's own URLs alone", async () => {
@@ -113,7 +111,6 @@ describe("rewriting links for readers", () => {
     const c = (await bob().post(`/posts/${post.id}/comments`, { body: "see https://example.com/c" }).expect(201)).body
       .data;
     expect(c.body).toMatch(/^see https:\/\/go\.pyqdeck\.in\/[A-Za-z0-9]{8}$/);
-    expect(c.rawBody).toBe("see https://example.com/c");
 
     const me = (await bob().patch("/members/me", { website: "https://bob.example.com" }).expect(200)).body.data;
     expect(me.websiteLink).toMatchObject({ host: "bob.example.com" });

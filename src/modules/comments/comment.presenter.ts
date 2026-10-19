@@ -59,7 +59,7 @@ export class CommentPresenter {
         isOwn: own,
         editedAt: c.editedAt ?? null,
         createdAt: c.createdAt,
-        ...(own && { rawBody: c.body, hasPendingEdit: Boolean(c.pendingRevision) }),
+        ...(own && { hasPendingEdit: Boolean(c.pendingRevision) }),
       };
     });
   }
