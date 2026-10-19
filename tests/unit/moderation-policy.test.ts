@@ -114,7 +114,9 @@ describe("stricter margin for sexual content", () => {
 
   it("holds a borderline sexual score that the general 0.5 margin would wave through", () => {
     expect(policy.decide(verdict({ sexual: 0.3 })).action).toBe("review");
-    expect(policy.decide(verdict({ sexual: 0.1 })).action).toBe("allow");
+    // A real case: a nude seen from behind scored 0.21 and was published.
+    expect(policy.decide(verdict({ sexual: 0.21 })).action).toBe("review");
+    expect(policy.decide(verdict({ sexual: 0.05 })).action).toBe("allow");
     expect(policy.decide(verdict({ violence: 0.3 })).action).toBe("allow");
   });
 

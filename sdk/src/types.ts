@@ -233,7 +233,7 @@ export interface ModerationEvent {
   provider: string;
   /** The text that was checked (cut at 2000 characters). Never present for child-safety results or after the account is deleted. */
   text?: string;
-  /** Links to the checked images. A refused image is deleted from storage, so its link no longer opens. */
+  /** Links to the checked images. A refused image is kept for 7 days (child-safety ones are deleted at once and keep no link), then deleted, so its link stops opening. */
   imageUrls?: string[];
   createdAt: string;
 }

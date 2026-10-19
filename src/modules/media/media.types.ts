@@ -68,5 +68,10 @@ export interface ImageModerator {
   check(
     image: ModeratedImage,
     context: { communityId: string; userId: string; sourceId?: string },
-  ): Promise<{ allowed: boolean; unavailable: boolean }>;
+  ): Promise<{
+    allowed: boolean;
+    unavailable: boolean;
+    /** Child-safety result: the file must be deleted at once. */
+    escalate?: boolean;
+  }>;
 }

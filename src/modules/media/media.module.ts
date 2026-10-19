@@ -10,7 +10,7 @@ import type { ImageModerator } from "./media.types.js";
 const imageModerator: ImageModerator = {
   async check(image, context) {
     const decision = await getModerationService().moderate({ images: [image] }, { source: "media", ...context });
-    return { allowed: decision.action === "allow", unavailable: decision.degraded };
+    return { allowed: decision.action === "allow", unavailable: decision.degraded, escalate: decision.escalate };
   },
 };
 

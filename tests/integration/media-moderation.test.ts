@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { Types } from "mongoose";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ImageModerator } from "../../src/modules/media/media.types.js";
@@ -22,7 +23,7 @@ const { createResolveCommunity } = await import("../../src/modules/communities/c
 const { attachMember } = await import("../../src/modules/auth/auth.middleware.js");
 const { MemberModel } = await import("../../src/modules/members/member.model.js");
 
-type Verdict = { allowed: boolean; unavailable: boolean };
+type Verdict = { allowed: boolean; unavailable: boolean; escalate?: boolean };
 const ALLOW: Verdict = { allowed: true, unavailable: false };
 const BLOCK: Verdict = { allowed: false, unavailable: false };
 const DOWN: Verdict = { allowed: false, unavailable: true };
@@ -31,13 +32,11 @@ const DOWN: Verdict = { allowed: false, unavailable: true };
 const check = vi.fn<ImageModerator["check"]>();
 const moderator: ImageModerator = { check };
 
+const service = new MediaService(new MediaRepository(), getStorageService(), new ImageValidator(), moderator);
 const router = Router();
 const community = Router({ mergeParams: true });
 community.use(createResolveCommunity(), attachMember);
-community.use(
-  "/media",
-  createMediaRoutes(new MediaService(new MediaRepository(), getStorageService(), new ImageValidator(), moderator)),
-);
+community.use("/media", createMediaRoutes(service));
 router.use("/v1/communities/:community", community);
 const app = createApp(router);
 
@@ -145,13 +144,42 @@ describe("direct upload (bytes go app -> provider)", () => {
     expect(context).toMatchObject({ sourceId: ticket.id });
   });
 
-  it("deletes a rejected image from storage, drops the record and refunds the space", async () => {
+  it("keeps a refused image for review, never usable, and cleanup deletes it after a week", async () => {
     const ticket = await startDirect(PNG);
     check.mockResolvedValue(BLOCK);
 
     const res = await complete(ticket.id).expect(422);
 
     expect(res.body.message).toContain("community guidelines");
+    expect((await providerOf("primary")).objects.has(ticket.upload.fields.key)).toBe(true);
+    expect(await MediaModel.findById(ticket.id)).toMatchObject({
+      status: "rejected",
+      url: expect.stringContaining(ticket.upload.fields.key),
+    });
+
+    // Confirming it again stays refused, and it never becomes usable.
+    check.mockResolvedValue(ALLOW);
+    await complete(ticket.id).expect(422);
+    expect(await MediaModel.countDocuments({ status: "pending" })).toBe(0);
+
+    // Too young to be removed; past the retention it is deleted and the space refunded.
+    expect(await service.cleanupExpired()).toBe(0);
+    await MediaModel.collection.updateOne(
+      { _id: new Types.ObjectId(ticket.id) },
+      { $set: { createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) } },
+    );
+    expect(await service.cleanupExpired()).toBe(1);
+    expect((await providerOf("primary")).objects.has(ticket.upload.fields.key)).toBe(false);
+    expect(await MediaModel.countDocuments()).toBe(0);
+    expect(await accountUsed()).toBe(0);
+  });
+
+  it("deletes a child-safety image at once, drops the record and refunds the space", async () => {
+    const ticket = await startDirect(PNG);
+    check.mockResolvedValue({ ...BLOCK, escalate: true });
+
+    await complete(ticket.id).expect(422);
+
     expect((await providerOf("primary")).objects.has(ticket.upload.fields.key)).toBe(false);
     expect(await MediaModel.countDocuments()).toBe(0);
     expect(await accountUsed()).toBe(0);

@@ -10,6 +10,7 @@ import {
   MAX_OPEN_UPLOADS_PER_USER,
   MEDIA_FOLDER,
   PENDING_TTL_MS,
+  REJECTED_TTL_MS,
   UPLOADING_TTL_MS,
 } from "./media.constants.js";
 import type { IMedia } from "./media.model.js";
@@ -52,12 +53,14 @@ export class MediaService {
     communityId: string,
     userId: string,
     sourceId?: string,
+    onRefused?: (escalate: boolean) => Promise<void>,
   ): Promise<void> {
     const verdict = await this.moderator.check(image, { communityId, userId, sourceId });
     if (verdict.unavailable) {
       throw AppError.serviceUnavailable("Image checks are temporarily unavailable, please try again shortly");
     }
     if (!verdict.allowed) {
+      await onRefused?.(verdict.escalate === true);
       throw AppError.unprocessable("This image cannot be posted because it may violate our community guidelines");
     }
   }
@@ -142,6 +145,10 @@ export class MediaService {
     if (!media || media.owner.toString() !== ownerId || media.communityId.toString() !== communityId) {
       throw AppError.notFound("Media not found");
     }
+    // A refused image is kept for review but can never be confirmed afterwards.
+    if (media.status === "rejected") {
+      throw AppError.unprocessable("This image cannot be posted because it may violate our community guidelines");
+    }
     if (media.status !== "uploading") return media;
 
     const found = await this.storage.inspect({ accountId: media.accountId.toString(), key: media.key });
@@ -152,14 +159,21 @@ export class MediaService {
       throw AppError.badRequest("The uploaded file does not match what was declared");
     }
 
-    // The file is already at the provider, so a rejected image must be deleted. A moderation outage must not delete
-    // it: the app can simply call complete again once checks are back.
-    try {
-      await this.assertImageAllowed({ url: found.url }, communityId, ownerId, media.id);
-    } catch (err) {
-      if (err instanceof AppError && err.statusCode === StatusCodes.UNPROCESSABLE_ENTITY) await this.discard(media);
-      throw err;
-    }
+    // The file is already at the provider. A refused image is kept for a few days so moderators can see what the check
+    // refused (the cleanup job deletes it), except child-safety results, which are deleted at once. A moderation
+    // outage must not delete anything: the app can simply call complete again once checks are back.
+    await this.assertImageAllowed({ url: found.url }, communityId, ownerId, media.id, async (escalate) => {
+      if (escalate) {
+        await this.discard(media);
+        return;
+      }
+      const kept = await this.repository.rejectUpload(media.id, {
+        url: found.url,
+        size: found.size,
+        mimeType: found.mimeType,
+      });
+      if (kept) await this.storage.settle(media.accountId.toString(), media.size, found.size);
+    });
 
     const done = await this.repository.completeUpload(media.id, {
       url: found.url,
@@ -283,7 +297,7 @@ export class MediaService {
   }
 
   /**
-   * Deletes abandoned uploads: confirmed-but-never-used (`pending`) and never-confirmed (`uploading`) ones. One
+   * Deletes abandoned uploads: confirmed-but-never-used (`pending`) and never-confirmed (`uploading`) and long-kept refused (`rejected`) ones. One
    * failure never blocks the rest; it is retried on the next run.
    */
   async cleanupExpired(batchSize = 100): Promise<number> {
@@ -291,6 +305,7 @@ export class MediaService {
     const stale = [
       ...(await this.repository.findStale("pending", new Date(now - PENDING_TTL_MS), batchSize)),
       ...(await this.repository.findStale("uploading", new Date(now - UPLOADING_TTL_MS), batchSize)),
+      ...(await this.repository.findStale("rejected", new Date(now - REJECTED_TTL_MS), batchSize)),
     ];
     let removed = 0;
     for (const media of stale) {

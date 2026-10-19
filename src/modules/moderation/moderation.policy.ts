@@ -36,7 +36,7 @@ export const DEFAULT_POLICY: PolicyConfig = {
   },
   nearMissScore: 0.5,
   // Sexual content is held for a person to look at from a much lower score, so a borderline picture is not waved through.
-  nearMissScores: { sexual: 0.25, "sexual/minors": 0.05 },
+  nearMissScores: { sexual: 0.1, "sexual/minors": 0.05 },
 };
 
 const ESCALATE_CATEGORIES = ["sexual/minors"];

@@ -37,6 +37,13 @@ export class MediaRepository extends BaseRepository<IMedia> {
       .exec();
   }
 
+  /** Flips `uploading` to `rejected` exactly once, keeping the file details for review. */
+  rejectUpload(id: string, data: Pick<IMedia, "url" | "size" | "mimeType">) {
+    return this.model
+      .findOneAndUpdate({ _id: id, status: "uploading" }, { ...data, status: "rejected" }, { returnDocument: "after" })
+      .exec();
+  }
+
   findByIds(ids: Array<string | Types.ObjectId>) {
     return this.model.find({ _id: { $in: ids } }).exec();
   }

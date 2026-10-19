@@ -6,6 +6,12 @@ export const MEDIA_FOLDER = "pyqdeck-community/media";
 /** Uploads never attached to a post within this window are deleted by the cleanup job. */
 export const PENDING_TTL_MS = 60 * 60 * 1000;
 
+/**
+ * A refused direct upload is kept this long so moderators can look at what the check refused, then the cleanup job
+ * deletes it. Child-safety results are never kept.
+ */
+export const REJECTED_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
 /** Format names as providers spell them (Cloudinary `allowed_formats`). Keep in step with ALLOWED_IMAGE_TYPES. */
 export const ALLOWED_IMAGE_FORMATS = ["jpg", "png", "webp"];
 
