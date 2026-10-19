@@ -88,6 +88,48 @@ export class StorageAdminService {
     }
   }
 
+  /**
+   * Makes sure an account described by configuration exists (the environment-defined account). Safe to run on every
+   * boot: it creates the account if missing, updates the stored keys if they changed, and otherwise does nothing.
+   * It never touches usage counters or the status, so a `full` or admin-disabled account stays that way.
+   */
+  async ensureAccount(input: NewAccountInput): Promise<"created" | "updated" | "unchanged"> {
+    const existing = await this.repository.findByNameWithCredentials(input.name);
+    if (!existing) {
+      await this.add(input);
+      return "created";
+    }
+
+    let credentials: unknown;
+    try {
+      credentials = this.registry.parseCredentials(input.provider, input.credentials);
+    } catch (err) {
+      if (err instanceof ZodError)
+        throw AppError.badRequest("Invalid credentials for this provider", err.flatten().fieldErrors);
+      throw err;
+    }
+    const same =
+      existing.provider === input.provider && this.cipher.decrypt(existing.credentials) === JSON.stringify(credentials);
+    if (same && existing.capacityBytes === input.capacityBytes) return "unchanged";
+
+    if (!same) {
+      // New keys are tested before they replace the old ones, so a typo in the environment cannot break working uploads.
+      try {
+        await this.registry.create(input.provider, credentials).ping();
+      } catch (err) {
+        throw AppError.badRequest(
+          `Could not connect to ${input.provider}: ${(err as Error).message ?? "unknown error"}`,
+        );
+      }
+      existing.provider = input.provider;
+      existing.credentials = this.cipher.encrypt(JSON.stringify(credentials));
+      this.resolver.evict(existing.id as string);
+    }
+    existing.capacityBytes = input.capacityBytes;
+    await existing.save();
+    return "updated";
+  }
+
   async update(id: string, changes: AccountUpdate) {
     const doc = await this.repository.updateById(id, changes);
     if (!doc) throw AppError.notFound("Storage account not found");

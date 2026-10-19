@@ -25,6 +25,14 @@ const schema = z.object({
     .string()
     .optional()
     .refine((v) => !v || Buffer.from(v, "base64").length === 32, "must be 32 bytes, base64 encoded"),
+  // Optional: one Cloudinary account taken from the environment, so images work without calling the admin API.
+  // On boot it is created (or its keys updated) as the storage account named "cloudinary-env". More accounts can still
+  // be added at runtime through /api/v1/admin/storage/accounts.
+  CLOUDINARY_CLOUD_NAME: z.string().optional(),
+  CLOUDINARY_API_KEY: z.string().optional(),
+  CLOUDINARY_API_SECRET: z.string().optional(),
+  // Soft limit for that account, in GB. Keep it a little below what your Cloudinary plan really allows.
+  CLOUDINARY_CAPACITY_GB: z.coerce.number().positive().max(1024).default(2),
   // Share of each storage account kept free, so we never fill an account to the brim.
   STORAGE_HEADROOM_PERCENT: z.coerce.number().min(0).max(50).default(5),
   // Content moderation (OpenAI Moderation API). Required in production so moderation can never be silently off.

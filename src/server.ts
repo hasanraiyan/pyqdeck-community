@@ -5,12 +5,23 @@ import { env } from "./config/env.js";
 import { logger } from "./core/utils/logger.js";
 import { getCommunityService } from "./modules/communities/community.module.js";
 import { createMediaCleanupJob } from "./modules/media/media.module.js";
+import { bootstrapStorageFromEnv } from "./modules/storage/storage.module.js";
 
 const PURGE_INTERVAL_MS = 60 * 60 * 1000;
 
 async function main() {
   await connectDatabase();
   await getCommunityService().ensureDefaults(env.SEED_COMMUNITIES);
+
+  const storage = await bootstrapStorageFromEnv();
+  if (storage.status === "failed")
+    logger.error({ error: storage.error }, "could not set up the storage account from the environment");
+  else if (storage.status !== "skipped")
+    logger.info({ status: storage.status }, "storage account from the environment");
+  else
+    logger.warn(
+      "no CLOUDINARY_* variables set: add a storage account through the admin API before images can be uploaded",
+    );
 
   const cleanupJob = createMediaCleanupJob();
   cleanupJob.start();

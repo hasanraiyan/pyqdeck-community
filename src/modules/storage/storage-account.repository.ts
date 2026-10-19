@@ -57,6 +57,10 @@ export class StorageAccountRepository extends BaseRepository<IStorageAccount> im
     return this.model.find().sort({ priority: 1, createdAt: 1 }).exec();
   }
 
+  findByNameWithCredentials(name: string) {
+    return this.model.findOne({ name }).select("+credentials").exec();
+  }
+
   /** Credentials included; for admin operations that must talk to the provider. */
   findWithCredentials(accountId: string) {
     return this.model.findById(accountId).select("+credentials").exec();

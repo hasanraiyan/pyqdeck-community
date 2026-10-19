@@ -28,6 +28,35 @@ let instance: ReturnType<typeof build> | undefined;
 const container = () => (instance ??= build());
 
 export const getStorageService = () => container().storage;
+
+const GB = 1024 ** 3;
+export const ENV_STORAGE_ACCOUNT_NAME = "cloudinary-env";
+
+/**
+ * Creates or refreshes the Cloudinary account defined by CLOUDINARY_* variables. Does nothing when they are not all
+ * set. A failure is reported to the caller rather than thrown, so a bad key never stops the server from starting.
+ */
+export async function bootstrapStorageFromEnv(): Promise<
+  { status: "skipped" | "created" | "updated" | "unchanged" } | { status: "failed"; error: string }
+> {
+  if (!env.CLOUDINARY_CLOUD_NAME || !env.CLOUDINARY_API_KEY || !env.CLOUDINARY_API_SECRET) return { status: "skipped" };
+  try {
+    const status = await container().admin.ensureAccount({
+      name: ENV_STORAGE_ACCOUNT_NAME,
+      provider: "cloudinary",
+      credentials: {
+        cloudName: env.CLOUDINARY_CLOUD_NAME,
+        apiKey: env.CLOUDINARY_API_KEY,
+        apiSecret: env.CLOUDINARY_API_SECRET,
+      },
+      capacityBytes: Math.floor(env.CLOUDINARY_CAPACITY_GB * GB),
+      priority: 1,
+    });
+    return { status };
+  } catch (err) {
+    return { status: "failed", error: err instanceof Error ? err.message : String(err) };
+  }
+}
 export const getStorageAdminService = () => container().admin;
 /** Exposed so tests can reach a provider instance (e.g. to simulate a client uploading straight to it). */
 export const getProviderResolver = () => container().resolver;
