@@ -14,7 +14,7 @@ const { getAccountService } = await import("../../src/modules/accounts/account.m
 const { getCommunityService } = await import("../../src/modules/communities/community.module.js");
 const { MemberModel } = await import("../../src/modules/members/member.model.js");
 const { ProfileTool } = await import("../../src/modules/mcp/mcp.profile.js");
-const { createMcpServer } = await import("../../src/modules/mcp/mcp.server.js");
+const { clerkIdOf, createMcpServer } = await import("../../src/modules/mcp/mcp.server.js");
 
 type Profile = {
   username: string;
@@ -152,6 +152,13 @@ describe("manage_profile: who is asking", () => {
 });
 
 describe("the MCP server itself", () => {
+  it("reads the Clerk user id from the shape mcpAuthClerk produces (extra.userId)", () => {
+    const authInfo = { token: "t", scopes: ["profile"], clientId: "c", extra: { userId: "user_a" } };
+    expect(clerkIdOf(authInfo)).toBe("user_a");
+    expect(clerkIdOf({ ...authInfo, extra: {} })).toBeUndefined();
+    expect(clerkIdOf(undefined)).toBeUndefined();
+  });
+
   const connect = async () => {
     const server = createMcpServer(tool());
     const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();

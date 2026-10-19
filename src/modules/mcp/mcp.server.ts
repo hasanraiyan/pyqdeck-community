@@ -3,9 +3,13 @@ import { AppError } from "../../core/errors/AppError.js";
 import { logger } from "../../core/utils/logger.js";
 import { profileInputShape, type ProfileTool } from "./mcp.profile.js";
 
-/** The Clerk user id that authorized the call. `mcpAuthClerk` puts Clerk's OAuth auth object in `authInfo`. */
-const clerkIdOf = (authInfo: unknown): string | undefined => {
-  const userId = (authInfo as { userId?: unknown } | undefined)?.userId;
+/**
+ * The Clerk user id that authorized the call. `mcpAuthClerk` verifies the OAuth token and sets `req.auth` to
+ * `{ token, scopes, clientId, extra: { userId } }`, which the MCP SDK hands to the tool as `authInfo`: the id is under
+ * `extra`, not at the top level.
+ */
+export const clerkIdOf = (authInfo: unknown): string | undefined => {
+  const userId = (authInfo as { extra?: { userId?: unknown } } | undefined)?.extra?.userId;
   return typeof userId === "string" && userId ? userId : undefined;
 };
 
