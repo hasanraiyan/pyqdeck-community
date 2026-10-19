@@ -25,21 +25,24 @@ export interface IModerationEvent {
 
 const RETENTION_SECONDS = 90 * 24 * 60 * 60;
 
-const moderationEventSchema = new Schema<IModerationEvent>({
-  communityId: { type: Schema.Types.ObjectId, ref: "Community", index: true },
-  userId: { type: Schema.Types.ObjectId, ref: "Member", index: true },
-  source: { type: String, required: true, index: true },
-  sourceId: { type: String },
-  action: { type: String, enum: ["allow", "review", "reject"], required: true, index: true },
-  degraded: { type: Boolean, default: false },
-  escalate: { type: Boolean, default: false, index: true },
-  categories: { type: [String], default: [] },
-  scores: { type: Schema.Types.Mixed, default: {} },
-  provider: { type: String, required: true },
-  text: { type: String },
-  imageUrls: { type: [String], default: undefined },
-  // Old events expire on their own.
-  createdAt: { type: Date, default: Date.now, expires: RETENTION_SECONDS },
-});
+const moderationEventSchema = new Schema<IModerationEvent>(
+  {
+    communityId: { type: Schema.Types.ObjectId, ref: "Community", index: true },
+    userId: { type: Schema.Types.ObjectId, ref: "Member", index: true },
+    source: { type: String, required: true, index: true },
+    sourceId: { type: String },
+    action: { type: String, enum: ["allow", "review", "reject"], required: true, index: true },
+    degraded: { type: Boolean, default: false },
+    escalate: { type: Boolean, default: false, index: true },
+    categories: { type: [String], default: [] },
+    scores: { type: Schema.Types.Mixed, default: {} },
+    provider: { type: String, required: true },
+    text: { type: String },
+    imageUrls: { type: [String], default: undefined },
+    // Old events expire on their own.
+    createdAt: { type: Date, default: Date.now, expires: RETENTION_SECONDS },
+  },
+  { minimize: false },
+); // keep an empty `scores` ({}), clients read it on every event
 
 export const ModerationEventModel = model<IModerationEvent>("ModerationEvent", moderationEventSchema);
