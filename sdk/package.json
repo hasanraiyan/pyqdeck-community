@@ -1,6 +1,6 @@
 {
   "name": "@pyqdeck/community-sdk",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Typed client for the PYQDeck Community API (posts, comments, members, short links). No Clerk, React or cache inside: the app supplies the token and owns caching.",
   "keywords": [
     "pyqdeck",

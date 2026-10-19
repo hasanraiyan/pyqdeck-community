@@ -15,6 +15,9 @@ import {
 /** Bounds cost and latency: nobody needs 100k characters of a post checked, and the tail of a huge text is not scanned. */
 export const MAX_MODERATED_TEXT_CHARS = 10_000;
 
+/** Longest piece of text kept in the history. Longer text is cut; the post itself is not affected. */
+export const MAX_SNAPSHOT_CHARS = 2000;
+
 /** Name stored in the audit trail when the local word filter, not the provider, made the decision. */
 export const PROFANITY_PROVIDER = "profanity-filter";
 
@@ -58,7 +61,7 @@ export class ModerationService {
         degraded: false,
         escalate: false,
       };
-      await this.record(context, decision, {}, PROFANITY_PROVIDER);
+      await this.record(context, decision, {}, input, PROFANITY_PROVIDER);
       return decision;
     }
 
@@ -66,7 +69,7 @@ export class ModerationService {
     try {
       verdict = await this.provider.moderate({ text, images });
     } catch (err) {
-      return this.failed(err, context);
+      return this.failed(err, context, input);
     }
 
     const decided = this.policy.decide(verdict);
@@ -87,12 +90,12 @@ export class ModerationService {
     if (decision.escalate)
       logger.error({ ...context }, "content flagged for child safety: escalate per your reporting process");
     // Every result is kept (allowed ones too) so "what did the check say about this image?" can always be answered.
-    await this.record(context, decision, verdict.scores);
+    await this.record(context, decision, verdict.scores, input);
     return decision;
   }
 
   /** Both "provider is down" and "provider cannot read this" must fail closed, but they mean different things. */
-  private async failed(err: unknown, context: ModerationContext): Promise<ModerationDecision> {
+  private async failed(err: unknown, context: ModerationContext, input: ModerationInput): Promise<ModerationDecision> {
     const unreadable = err instanceof ModerationInputError;
     if (!unreadable && !(err instanceof ModerationUnavailableError)) {
       logger.error({ err }, "unexpected moderation error");
@@ -104,7 +107,7 @@ export class ModerationService {
       ? { action: "reject", categories: [], reasons: ["unprocessable_input"], degraded: false, escalate: false }
       : { action: "review", categories: [], reasons: ["moderation_unavailable"], degraded: true, escalate: false };
     // An outage is kept too, marked `degraded`, so a missing verdict is visible instead of silently absent.
-    await this.record(context, decision, {});
+    await this.record(context, decision, {}, input);
     return decision;
   }
 
@@ -112,6 +115,7 @@ export class ModerationService {
     context: ModerationContext,
     decision: ModerationDecision,
     scores: Record<string, number>,
+    input: ModerationInput,
     providerName = this.provider.name,
   ) {
     if (!this.audit) return;
@@ -124,10 +128,22 @@ export class ModerationService {
         categories: decision.categories,
         scores,
         provider: providerName,
+        ...snapshotContent(input, decision.escalate),
       });
     } catch (err) {
       // The audit trail is important but must never break moderation itself.
       logger.error({ err }, "failed to record moderation event");
     }
   }
+}
+
+/**
+ * What the history keeps of a checked submission: the text (cut) and the links of its images. Nothing is kept for
+ * child-safety (`escalate`) results, and images given as raw bytes have no link to keep.
+ */
+export function snapshotContent(input: ModerationInput, escalate: boolean): { text?: string; imageUrls?: string[] } {
+  if (escalate) return {};
+  const text = input.text?.trim().slice(0, MAX_SNAPSHOT_CHARS);
+  const imageUrls = (input.images ?? []).flatMap((image) => ("url" in image ? [image.url] : []));
+  return { ...(text && { text }), ...(imageUrls.length > 0 && { imageUrls }) };
 }

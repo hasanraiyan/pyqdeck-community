@@ -84,9 +84,12 @@ export interface ModerationEventInput {
   categories: string[];
   scores: Record<string, number>;
   provider: string;
+  /** What was checked, kept for moderators (see `snapshotContent`). Never set for `escalate` events. */
+  text?: string;
+  imageUrls?: string[];
 }
 
-/** Records moderation outcomes. The content itself is deliberately never stored. */
+/** Records moderation outcomes together with a snapshot of what was checked, for moderators. */
 export interface ModerationAudit {
   record(event: ModerationEventInput): Promise<void>;
 }

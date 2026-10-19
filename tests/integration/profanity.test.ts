@@ -59,7 +59,7 @@ describe("the word filter on every kind of text", () => {
       .expect(201);
   });
 
-  it("records the refusal without the words themselves", async () => {
+  it("records the refusal with the text, for the moderators", async () => {
     await alice().post("/posts", { body: BAD }).expect(422);
     const event = await ModerationEventModel.findOne().lean();
     expect(event).toMatchObject({
@@ -67,7 +67,7 @@ describe("the word filter on every kind of text", () => {
       action: "reject",
       provider: "profanity-filter",
       categories: ["profanity"],
+      text: BAD,
     });
-    expect(JSON.stringify(event)).not.toMatch(/fuck|idiot/i);
   });
 });

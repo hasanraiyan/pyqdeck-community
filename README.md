@@ -291,8 +291,11 @@ storage.
 (`media`, `post`, `comment`, `profile`), the result (`allow` / `review` / `reject`), the categories and scores, whether
 the checker was down (`degraded`) and the id of the thing checked (`sourceId`, a media id for images). Moderators and admins
 read it at `GET /api/v1/communities/{community}/moderation/events`, e.g. `?sourceId=<media id>` for one image,
-`?action=allow&source=media` for every allowed image, or `?userId=<member id>`. The content itself is **never stored**, and
-events are deleted after 90 days. The same scores are written to the server log as `moderation verdict`.
+`?action=allow&source=media` for every allowed image, or `?userId=<member id>`. Each record also keeps **what was checked**:
+the text (cut at 2,000 characters) and the links of the images, so a moderator sees the result next to the thing it was about.
+This is visible to that community's moderators and admins only, is deleted after 90 days, is dropped when the person deletes
+their account, and is **never kept for child-safety (`escalate`) results**. A refused image is deleted from storage, so its
+link no longer opens. The scores are also written to the server log as `moderation verdict` (scores only, never the content).
 
 **Child safety (`escalate: true`).** Blocking such content is not enough. Decide now who reviews `escalate` events,
 how you preserve what law requires, and how you report it (in India, via the national cybercrime reporting portal and

@@ -1,8 +1,9 @@
 import { Schema, model, type Types } from "mongoose";
 
 /**
- * One row per blocked or held item. It records WHAT happened and WHY, never the content itself, so the audit trail
- * does not become a store of the very material that was rejected.
+ * One row per content check: who, where, the result and why, plus a snapshot of what was checked so a moderator can see
+ * what the result was about (text, image links). The snapshot is kept for the retention window only, is dropped when the
+ * person's account is deleted, and is NEVER kept for `escalate` events (child safety), which must not be copied around.
  */
 export interface IModerationEvent {
   communityId?: Types.ObjectId;
@@ -15,6 +16,10 @@ export interface IModerationEvent {
   categories: string[];
   scores: Record<string, number>;
   provider: string;
+  /** The checked text, cut to `MAX_SNAPSHOT_CHARS`. */
+  text?: string;
+  /** Links to the checked images. A refused image is deleted from storage, so its link no longer opens. */
+  imageUrls?: string[];
   createdAt?: Date;
 }
 
@@ -31,6 +36,8 @@ const moderationEventSchema = new Schema<IModerationEvent>({
   categories: { type: [String], default: [] },
   scores: { type: Schema.Types.Mixed, default: {} },
   provider: { type: String, required: true },
+  text: { type: String },
+  imageUrls: { type: [String], default: undefined },
   // Old events expire on their own.
   createdAt: { type: Date, default: Date.now, expires: RETENTION_SECONDS },
 });

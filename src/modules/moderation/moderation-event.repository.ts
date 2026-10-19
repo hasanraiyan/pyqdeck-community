@@ -18,4 +18,12 @@ export class ModerationEventRepository extends BaseRepository<IModerationEvent> 
       userId: event.userId && Types.ObjectId.isValid(event.userId) ? new Types.ObjectId(event.userId) : undefined,
     });
   }
+
+  /** Account deleted: the results stay (anonymous statistics) but the person's text and image links go. */
+  async scrubContentOf(memberIds: Array<string | Types.ObjectId>): Promise<number> {
+    const result = await this.model
+      .updateMany({ userId: { $in: memberIds } }, { $unset: { text: 1, imageUrls: 1 } })
+      .exec();
+    return result.modifiedCount;
+  }
 }

@@ -213,7 +213,7 @@ export interface LinkInfo {
   decision: "redirect" | "warn" | "blocked" | "gone" | "notfound";
 }
 
-/** One result of the content check. The content itself is never stored, only who, where, the result and the scores. */
+/** One result of the content check: who, where, the result, the scores, and what was checked. */
 export interface ModerationEvent {
   _id: string;
   /** The member who submitted it. */
@@ -231,6 +231,10 @@ export interface ModerationEvent {
   scores: Record<string, number>;
   /** Which checker decided, e.g. openai or profanity-filter. */
   provider: string;
+  /** The text that was checked (cut at 2000 characters). Never present for child-safety results or after the account is deleted. */
+  text?: string;
+  /** Links to the checked images. A refused image is deleted from storage, so its link no longer opens. */
+  imageUrls?: string[];
   createdAt: string;
 }
 

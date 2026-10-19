@@ -49,7 +49,7 @@ describe("ModerationService.moderate", () => {
     expect(provider.moderate).not.toHaveBeenCalled();
   });
 
-  it("rejects flagged content and records who, what and why, but never the content", async () => {
+  it("rejects flagged content and records who, what, why and a snapshot of the content", async () => {
     provider.moderate.mockResolvedValue(flagged("hate", 0.93));
 
     const decision = await service.moderate({ text: "some hateful text" }, context);
@@ -64,9 +64,9 @@ describe("ModerationService.moderate", () => {
         categories: ["hate"],
         scores: { hate: 0.93 },
         provider: "fake",
+        text: "some hateful text",
       },
     ]);
-    expect(JSON.stringify(recorded)).not.toContain("hateful text");
   });
 
   it("holds borderline content for review", async () => {

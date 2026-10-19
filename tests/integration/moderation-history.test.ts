@@ -76,6 +76,40 @@ describe("moderation history", () => {
     expect(allowed.data).toHaveLength(2);
   });
 
+  it("keeps the link of the checked image and the text of a refused post, for moderators", async () => {
+    const mediaId = await uploadAndConfirm();
+    await api("user_a").post("/posts", { body: "you are a fucking idiot" }).expect(422);
+
+    const image = (await api("user_mod").get(`/moderation/events?sourceId=${mediaId}`)).body.data[0];
+    expect(image.imageUrls).toEqual([expect.stringMatching(/^memory:\/\//)]);
+
+    const refused = (await api("user_mod").get("/moderation/events?action=reject&source=post")).body.data[0];
+    expect(refused).toMatchObject({ provider: "profanity-filter", text: "you are a fucking idiot" });
+    // An empty object must survive storage: clients read `scores` and `categories` on every event.
+    expect(refused.scores).toEqual({});
+    expect(Array.isArray(refused.categories)).toBe(true);
+  });
+
+  it("removes a person's text and image links from the history when their account is deleted", async () => {
+    await uploadAndConfirm();
+    await api("user_a").post("/posts", { body: "you are a fucking idiot" }).expect(422);
+    expect(
+      await ModerationEventModel.countDocuments({
+        $or: [{ text: { $exists: true } }, { imageUrls: { $exists: true } }],
+      }),
+    ).toBe(2);
+
+    const { getAccountService } = await import("../../src/modules/accounts/account.module.js");
+    await getAccountService().markDeleted("user_a");
+
+    expect(await ModerationEventModel.countDocuments()).toBe(2); // the results stay
+    expect(
+      await ModerationEventModel.countDocuments({
+        $or: [{ text: { $exists: true } }, { imageUrls: { $exists: true } }],
+      }),
+    ).toBe(0);
+  });
+
   it("keeps the history private to staff of that community", async () => {
     const mediaId = await uploadAndConfirm();
     await api("user_a").get(`/moderation/events?sourceId=${mediaId}`).expect(403);

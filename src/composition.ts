@@ -18,6 +18,7 @@ import { getMemberService } from "./modules/members/member.module.js";
 import { createMemberRoutes } from "./modules/members/member.routes.js";
 import { createModerationRoutes } from "./modules/moderation/moderation.routes.js";
 import { getContentModerator } from "./modules/moderation/moderation.module.js";
+import { ModerationEventRepository } from "./modules/moderation/moderation-event.repository.js";
 import { NotificationRepository } from "./modules/notifications/notification.repository.js";
 import { createNotificationRoutes } from "./modules/notifications/notification.routes.js";
 import { NotificationService } from "./modules/notifications/notification.service.js";
@@ -49,6 +50,7 @@ function build() {
   const social = new SocialService(new FollowRepository(), new BlockRepository(), members, notifications);
   const reactions = new ReactionService(new ReactionRepository());
   const idempotency = new IdempotencyStore();
+  const moderationEvents = new ModerationEventRepository();
   const moderator = getContentModerator();
   const media = getMediaService();
   const links = getLinkService();
@@ -84,6 +86,7 @@ function build() {
     const ids = memberships.map((m) => m._id);
     await posts.deleteAllByMembers(ids);
     await comments.deleteAllByMembers(ids);
+    await moderationEvents.scrubContentOf(ids); // their text and image links leave the moderation history
     await media.release(
       memberships
         .flatMap((m) => [m.avatarMediaId, m.coverMediaId])

@@ -107,7 +107,7 @@ describe("ModerationService with the word filter", () => {
     expect(provider.moderate).not.toHaveBeenCalled();
   });
 
-  it("records who and why, never the words", async () => {
+  it("records who, why and the text, so a moderator can see what was refused", async () => {
     const { audit, service } = setup();
     await service.moderate({ text: "you fucking idiot" }, { source: "comment", userId: "507f1f77bcf86cd799439011" });
     expect(audit.record).toHaveBeenCalledTimes(1);
@@ -117,8 +117,8 @@ describe("ModerationService with the word filter", () => {
       provider: PROFANITY_PROVIDER,
       categories: ["profanity"],
       source: "comment",
+      text: "you fucking idiot",
     });
-    expect(JSON.stringify(event)).not.toMatch(/fuck|idiot/i);
   });
 
   it("still sends clean text to the provider", async () => {

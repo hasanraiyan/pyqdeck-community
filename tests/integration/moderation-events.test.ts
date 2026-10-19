@@ -115,7 +115,7 @@ describe("recording", () => {
     expect(ttl?.expireAfterSeconds).toBe(90 * 24 * 60 * 60);
   });
 
-  it("is written end to end by the real service, without the content", async () => {
+  it("is written end to end by the real service, with a snapshot of what was checked", async () => {
     const provider = {
       name: "fake",
       moderate: vi.fn(async () => ({
@@ -128,7 +128,7 @@ describe("recording", () => {
     const user = await MemberModel.findOne({}).sort({ createdAt: 1 });
 
     const decision = await service.moderate(
-      { text: "SOME-OFFENSIVE-TEXT-THAT-MUST-NOT-BE-STORED" },
+      { text: "SOME-OFFENSIVE-TEXT" },
       { userId: user!.id, communityId: cid, source: "comment", sourceId: "c1" },
     );
 
@@ -137,6 +137,6 @@ describe("recording", () => {
     expect(stored).toMatchObject({ source: "comment", sourceId: "c1", action: "reject", categories: ["hate"] });
     expect(String(stored!.communityId)).toBe(cid);
     expect(String(stored!.userId)).toBe(user!.id);
-    expect(JSON.stringify(stored)).not.toContain("SOME-OFFENSIVE-TEXT");
+    expect(stored!.text).toBe("SOME-OFFENSIVE-TEXT");
   });
 });
