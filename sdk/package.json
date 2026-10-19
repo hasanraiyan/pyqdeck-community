@@ -1,7 +1,24 @@
 {
   "name": "@pyqdeck/community-sdk",
   "version": "0.1.0",
-  "description": "Typed client for the PYQDeck Community API (posts, comments, members, links). No Clerk, React or cache inside: the app supplies the token and owns caching.",
+  "description": "Typed client for the PYQDeck Community API (posts, comments, members, short links). No Clerk, React or cache inside: the app supplies the token and owns caching.",
+  "keywords": [
+    "pyqdeck",
+    "community",
+    "sdk",
+    "react-native",
+    "expo",
+    "tanstack-query"
+  ],
+  "license": "MIT",
+  "author": "Raiyan Hasan",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hasanraiyan/pyqdeck-community.git",
+    "directory": "sdk"
+  },
+  "homepage": "https://github.com/hasanraiyan/pyqdeck-community/tree/master/sdk#readme",
+  "bugs": "https://github.com/hasanraiyan/pyqdeck-community/issues",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -12,14 +29,19 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepublishOnly": "pnpm run build"
   },
-  "license": "ISC",
   "devDependencies": {
     "typescript": "~6.0.0"
   }

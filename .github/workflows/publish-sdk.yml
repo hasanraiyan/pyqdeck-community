@@ -1,0 +1,46 @@
+name: Publish SDK
+
+# Publishes @pyqdeck/community-sdk to npm when a tag like `sdk-v0.1.1` is pushed.
+# Needs an npm automation token saved in the repo secrets as NPM_TOKEN.
+# Bump "version" in sdk/package.json first; the tag must match it.
+on:
+  push:
+    tags:
+      - "sdk-v*"
+
+permissions:
+  contents: read
+  id-token: write # lets npm record where the package was built (provenance)
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Check the tag matches the package version
+        run: |
+          VERSION=$(node -p "require('./sdk/package.json').version")
+          if [ "sdk-v$VERSION" != "${GITHUB_REF_NAME}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match sdk/package.json version $VERSION"
+            exit 1
+          fi
+
+      - name: Build
+        run: pnpm exec tsc -p sdk/tsconfig.json
+
+      - name: Publish
+        working-directory: sdk
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
